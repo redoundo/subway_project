@@ -1,0 +1,181 @@
+import React, { useRef, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import axios from 'axios';
+import useStatusStore from './store/statusStore.js'; // Import the Zustand store
+import '../css/PreCheckPage.css';
+
+const PreCheckPage = () => {
+    const { examId_ } = useParams();
+    const navigate = useNavigate();
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+
+    // Zustand store for state management
+    const {
+        micStatus, setMicStatus,
+        webcamStatus, setWebcamStatus,
+        identityStatus, setIdentityStatus,
+        preCheckComplete, setPreCheckComplete
+    } = useStatusStore();
+
+
+    const [stream, setStream] = useState(null);
+    const [error, setError] = useState('');
+    const [verificationAttempts, setVerificationAttempts] = useState(0);
+
+    // Cleanup stream on component unmount
+    useEffect(() => {
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [stream]);
+
+
+    const handleMicCheck = async () => {
+        setMicStatus('checking');
+        setError('');
+        try {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioStream.getTracks().forEach(track => track.stop());
+            setMicStatus('success');
+        } catch (err) {
+            console.error('Microphone check failed:', err);
+            setError('Microphone not found or access was denied. You will be redirected.');
+            setMicStatus('error');
+            setTimeout(() => navigate('/dashboard/examinee'), 3000);
+        }
+    };
+
+    const handleWebcamCheck = async () => {
+        if (micStatus !== 'success') return; // 여기에서도 다른 시험에서 왔는지 확인해야 할까?
+        setWebcamStatus('checking');
+        setError('');
+        try {
+            const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            setStream(mediaStream);
+            if (videoRef.current) {
+                videoRef.current.srcObject = mediaStream;
+            }
+            setWebcamStatus('success'); 
+        } catch (err) {
+            console.error('Webcam check failed:', err);
+            setError('Webcam not found or access was denied. You will be redirected.');
+            setWebcamStatus('error');
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            setTimeout(() => navigate('/dashboard/examinee'), 3000);
+        }
+    };
+
+    const handleIdentityVerification = async () => {
+        if (webcamStatus !== 'success') return;
+
+        setIdentityStatus('checking');
+        setError('');
+
+        if (videoRef.current && canvasRef.current) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('image', blob, 'identity.jpg');
+
+                try {
+                    const token = localStorage.getItem('token');
+                    await axios.post('/api/identity-verification', formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data',
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    setIdentityStatus('success');
+                    setPreCheckComplete(true);
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
+                } catch (err) {
+                    console.error('Identity verification failed:', err);
+                    const newAttempts = verificationAttempts + 1;
+                    setVerificationAttempts(newAttempts);
+
+                    if (newAttempts >= 5) {
+                        setError('Identity verification failed 5 times. Redirecting to login.');
+                        setIdentityStatus('error');
+                        localStorage.removeItem('token');
+                        setTimeout(() => navigate('/login'), 3000);
+                    } else {
+                        setError(`Verification failed. Please try again. (Attempt ${newAttempts}/5)`);
+                        setIdentityStatus('retrying');
+                    }
+                }
+            }, 'image/jpeg');
+        }
+    };
+
+    const handleReturnToDashboard = () => {
+        navigate('/dashboard/examinee');
+    };
+
+    return (
+        <div className="pre-check-container">
+            <h2>Pre-Exam Environment Check</h2>
+            {error && <p className="error-message">{error}</p>}
+
+            <div className="media-check">
+                <video ref={videoRef} autoPlay playsInline muted className={webcamStatus === 'success' ? 'visible' : 'hidden'}></video>
+                <canvas ref={canvasRef} className="hidden"></canvas>
+                {webcamStatus !== 'success' && <div className="placeholder-box">Your webcam feed will appear here.</div>}
+            </div>
+
+            <div className="steps-container">
+                <div className="step">
+                    <h3>Step 1: Microphone Check</h3>
+                    <p>Status: {micStatus}</p>
+                    <button onClick={handleMicCheck} disabled={micStatus !== 'idle'}>
+                        Check Microphone
+                    </button>
+                </div>
+
+                <div className="step">
+                    <h3>Step 2: Webcam Check</h3>
+                    <p>Status: {webcamStatus}</p>
+                    <button onClick={handleWebcamCheck} disabled={micStatus !== 'success' || webcamStatus !== 'idle'}>
+                        Check Webcam
+                    </button>
+                </div>
+
+                <div className="step">
+                    <h3>Step 3: Identity Verification</h3>
+                    <p>Status: {identityStatus}</p>
+                    <p>Please hold your ID card next to your face and click the button.</p>
+                    <button
+                        onClick={handleIdentityVerification}
+                        disabled={webcamStatus !== 'success' || identityStatus === 'checking' || identityStatus === 'success'}
+                    >
+                        {identityStatus === 'checking' ? 'Verifying...' : 'Verify Identity'}
+                    </button>
+                </div>
+            </div>
+
+            {preCheckComplete && (
+                <div className="completion-section">
+                    <h3>Pre-check Complete!</h3>
+                    <p>You have successfully completed all pre-exam checks.</p>
+                    <button onClick={handleReturnToDashboard} className="btn btn-primary">
+                        Return to Dashboard
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default PreCheckPage;

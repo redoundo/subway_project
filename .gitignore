@@ -1,0 +1,8 @@
+*.env
+*.idea
+*__pycache__
+*.md
+*.toml
+.gemini
+backend/front_example
+*/node_modules

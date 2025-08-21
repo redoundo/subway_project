@@ -1,0 +1,23 @@
+{
+  "name": "media_server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "private": true,
+  "dependencies": {
+    "browserify": "^17.0.1",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "mediasoup": "^3.18.0",
+    "mediasoup-client": "^3.15.2",
+    "socket.io": "^4.8.1",
+    "webpack": "^5.101.2"
+  },
+  "devDependencies": {
+    "webpack-cli": "^6.0.1"
+  }
+}
