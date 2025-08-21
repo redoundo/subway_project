@@ -126,7 +126,7 @@ class ExamSessionAuthenticationChecker(AuthenticationChecker):
         # 시험 세션은 오로지 관리자만 생성 가능합니다. 감독관과 응시자는 시험 세션을 생성할 권한이 없으므로 에러를 냅니다.
         if (exam_session is None) and self.exam_session_must_exist and (user_info.role != "admin"):
             raise HTTPException(status_code=401, detail="The exam session you are attempting to participate in does not exist, and you are not authorized to create it.")
-        # ids: list[str] = [str(ee.id) for ee in exam.expected_examinees]
+
         if user_info.role == "supervisor":
             supervisor_ids: list[str] = [str(ps.id) for ps in exam.proctors]
             # user_info 의 role 이 감독관이라면 시험 감독에 참여하는 감독관들의 id 에 str(user_info.id) 값이 존재하는지 확인합니다.

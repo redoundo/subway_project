@@ -38,7 +38,7 @@ async def get_exams_for_supervisor(user_info: User = Depends(AuthenticationCheck
     Returns Exam information for which the supervisor is assigned as a proctor.
     """
     # Find sessions where the current supervisor is a proctor
-    return  await exam_session_crud.get_all(query={"proctor_ids": str(user_info.id)}, limit=1000)
+    return  await exam_session_crud.get_all(query={"proctors.id": user_info.id}, limit=1000)
 
 
 @exam_router.get("/api/exams/examinee", response_model=List[ExamSession])

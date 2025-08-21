@@ -34,7 +34,7 @@ async def login(response: Response, request: LoginRequestModel = Body(...)):
             detail={"code": "AUTH_INVALID", "message": "잘못된 아이디 또는 비밀번호입니다."}
         )
     # 3. 로그인 시도 횟수 제한
-    login_attempt: LoginRequest | None = await login_request_crud.get_by({"user._id" : user.id, "user.pwd" : user.pwd})
+    login_attempt: LoginRequest | None = await login_request_crud.get_by({"user.id" : user.id, "user.pwd" : user.pwd})
     now = datetime.now()
 
     if login_attempt and login_attempt.last_request_time > now - timedelta(minutes=10):
