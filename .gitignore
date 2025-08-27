@@ -6,3 +6,4 @@
 .gemini
 backend/front_example
 */node_modules
+*.html

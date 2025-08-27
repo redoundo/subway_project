@@ -124,26 +124,26 @@ class EventLog(Document):
             "severity", "event_type", "is_dismissed"
         ]
 
-
-class FinalReport(Document):
-    exam_id: str
-    target_user_id: str = Field(description="보고서 대상의 user_id")
-    created_datetime: datetime = Field(default_factory=datetime.now, description="보고서 생성 일시")
-    report_url: str = Field(description="생성된 보고서가 위치한 경로")
+class ExamQuestionSelectionLocation(BaseModel):
+    x0: float
+    x1: float
+    y0: float
+    y1: float
 
 class ExamQuestionSelection(BaseModel):
     question_id: str
-    selection_count: int
-
-class ExamQuestionBody(BaseModel):
-    question_id: str = Field(description="시험 문항 아이디", min_length=5)
-    body_base64: str = Field(description="시험 문항의 제목, 선택지, 보기 내용까지 이미지로 추출한 뒤 base64 로 변환한 값.", min_length=10)
+    selection_index: int
+    location: ExamQuestionSelectionLocation
 
 class ExamQuestion(BaseModel):
     question_id: str = Field(description="시험 문항 아이디", min_length=5)
-    question_index: int = Field(description="시험 문항 인덱스", gt=0)
-    bodies: list[ExamQuestionBody]
-    selection: ExamQuestionSelection = Field(description="실제 선택지가 아니다. 사용자의 선택지를 받아오기 위한 버튼의 개수가 담겨 있는 필드.")
+    question_index: int = Field(description="시험 문항 번호", gt=0)
+    selection: ExamQuestionSelection = Field(description="pdf 를 html 로 바꾼 뒤, 그 위에 버튼을 정해진 위치에 맵핑합니다. ")
+
+class ExamHTML(BaseModel):
+    html: str = Field(description="id='page-container' 내부에 있는 id='pf[0-9]+' 값을 가진 div 태그입니다.")
+    questions: list[ExamQuestion]
+    page_index: int = Field(min_length=0)
 
 class ExamContent(BaseModel):
     """
@@ -151,15 +151,14 @@ class ExamContent(BaseModel):
     """
     exam_content_id: str
     schedule_id: str
-    exam_id: str
-    questions: list[ExamQuestion]
+    outer_html: str = Field(description="id='page-container' 를 가진 div 태그 그 자체와 id='page-container' 바깥에 있는 모든 html 태그를 의미 합니다.")
+    htmls: list[ExamHTML] = Field(description="id='pf[0-9]+' 를 가진 모든 div 태그를 의미 합니다.")
 
 class Schedule(BaseModel):
     """
     시험 스케쥴 정보
     """
     schedule_id: str
-    exam_id: str
     schedule_index: int = Field(description="몇 교시 스케줄인가요?")
     start_datetime: datetime = Field(description="스케줄 시작 시간")
     end_datetime: datetime
@@ -170,7 +169,7 @@ class Exam(Document):
     등록된 시험 정보
     """
     exam_title: str = Field(description="시험 제목")
-    proctors: list[User] = Field(description="담당 감독관들의 ID")
+    proctors: list[User] = Field(description="담당 감독관들")
     created_at: datetime = Field(default_factory=datetime.now, description="시험 정보 생성 일시")
     exam_start_datetime: datetime
     exam_end_datetime: datetime

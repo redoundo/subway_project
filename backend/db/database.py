@@ -7,7 +7,7 @@ from pymongo import AsyncMongoClient
 from beanie import init_beanie
 from typing import TypeVar
 from backend.db import User, Examinee, Verifications, Logs, ExamSession
-from backend.db import Exam, LoginRequest, EventLog, FinalReport
+from backend.db import Exam, LoginRequest, EventLog
 
 load_dotenv()
 
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
         database=client.get_database(db_name),  # 사용할 데이터베이스
         document_models=[
             ExamSession, LoginRequest, User, Examinee, Verifications,
-            Logs, EventLog, Exam, FinalReport
+            Logs, EventLog, Exam
         ]  # 맵핑할 Document 클래스 목록
     )
 

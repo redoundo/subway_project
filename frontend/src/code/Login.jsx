@@ -15,20 +15,16 @@ export const AdminLogin = () => {
 
     const handleSubmit = async () => {
         setError('');
-
+        console.log(password);
+        console.log(email);
         try {
             // The API endpoint for admin login is assumed to be '/api/admin/login'.
             // This should be confirmed with the backend specification.
-            const response = await axios.post('/api/admin/login', {
+            const response = await axios.post('/auth/login', {
                 email: email,
-                pwd: password,
+                password: password,
+                invitationToken: null
             });
-
-            // The documentation mentions storing a JWT token in a cookie.
-            // Typically, the server would set an HttpOnly cookie via a Set-Cookie header.
-            // If the token is returned in the response body, it should be stored securely.
-            localStorage.setItem('jwt_token', response.data.token);
-
             console.log('Admin login successful:', response.data);
 
             // After a successful login, redirect to the admin dashboard.
@@ -90,7 +86,7 @@ export const UserLogin = () => {
         try {
             // The API endpoint for user/proctor login is assumed to be '/api/invite/login'.
             // It would likely require the invitation token from the URL and the password.
-            const response = await axios.post(`/api/auth/login`, {
+            const response = await axios.post(`/auth/login`, {
                 invitationToken: token,
                 pwd: password, email: email,
             });

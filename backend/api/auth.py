@@ -1,17 +1,21 @@
 from datetime import datetime, timedelta
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Body, Response, Depends
 from pydantic import BaseModel, Field
 import secrets
 from backend.core import create_jwt, AuthenticationChecker
 from backend.db import User, LoginRequest, Logs, user_crud, login_request_crud
+from cryptography.fernet import Fernet, InvalidToken
 
 auth_router = APIRouter()
 
 # --- Request/Response Models ---
 
 class LoginRequestModel(BaseModel):
-    email: str = Field(..., description="사용자 아이디")
-    password: str = Field(..., description="비밀번호")
+    email: str = Field(..., description="사용자 아이디", min_length=4)
+    password: str = Field(..., description="비밀번호", min_length=5)
+    invitationToken: Optional[str] = Field(description="초대 url의 맨 뒤에 위치한 토큰 값. 응시자, 감독관은 전부 이 값을 보내야 한다")
 
 class LoginResponseModel(BaseModel):
     token: str = Field(description="발급된 JWT Access Token")
@@ -22,17 +26,46 @@ class LoginResponseModel(BaseModel):
 # --- API Endpoint ---
 
 @auth_router.post("/login", response_model=LoginResponseModel)
-async def login(response: Response, request: LoginRequestModel = Body(...)):
+async def login(response: Response, login_param: LoginRequestModel = Body(...)):
     """
     사용자 로그인을 처리하고 JWT를 발급합니다.
     """
-    user: User | None = await user_crud.get_by({"email": request.email, "pwd": request.password})
+    user: User | None = await user_crud.get_by({"email": login_param.email, "pwd": login_param.password})
     # 4. 데이터베이스 조회
     if not user:
         raise HTTPException(
             status_code=401,
             detail={"code": "AUTH_INVALID", "message": "잘못된 아이디 또는 비밀번호입니다."}
         )
+
+    # 관리자가 invitationToken 토큰을 들고 오는 경우, 올바른 로그인 요청이 아니므로 에러를 냅니다.
+    if (user.role == "admin") and (login_param.invitationToken is not None):
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "AUTH_INVALID", "message": "관리자는 지정된 url 로만 로그인 할 수 있습니다."}
+        )
+
+    if user.role != "admin":
+        # 응시자, 감독관은 invitationToken 을 보내야 합니다.
+        if login_param.invitationToken is None:
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "AUTH_INVALID", "message": "로그인에 필요한 값들을 전부 제공해주세요."}
+            )
+        cipher_suite = Fernet(login_param.password)
+        try:
+            decrypted_user_id_bytes = cipher_suite.decrypt(login_param.invitationToken)
+            decrypted_user_id: str = decrypted_user_id_bytes.decode('utf-8')
+            if decrypted_user_id != str(user.id):
+                raise HTTPException(
+                    status_code=401,
+                    detail={"code": "AUTH_INVALID", "message": "이메일로 받은 초대 url 로 입장 하세요. 만약 그렇게 했는데도 이 에러가 발생 한다면, 이메일과 비밀번호를 제대로 입력했는지 확인하세요."}
+                )
+        except InvalidToken:
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "AUTH_INVALID", "message": "제공하신 값 중에 유효하지 않은 값이 있습니다. 확인 후 다시 보내주세요."}
+            )
     # 3. 로그인 시도 횟수 제한
     login_attempt: LoginRequest | None = await login_request_crud.get_by({"user.id" : user.id, "user.pwd" : user.pwd})
     now = datetime.now()

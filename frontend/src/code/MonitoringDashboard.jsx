@@ -50,7 +50,7 @@ const MonitoringDashboard = () => {
             try {
                 const token = localStorage.getItem('token');
                 // It's better to fetch exam details to get the full examinee list
-                const examDetailsResponse = await axios.get(`/api/exams/admin/get_exam/${examId}`, {
+                const examDetailsResponse = await axios.get(`/exams/admin/get_exam/${examId}`, {
                      headers: { Authorization: `Bearer ${token}` }
                 });
                 const fetchedExam = examDetailsResponse.data;
@@ -63,7 +63,7 @@ const MonitoringDashboard = () => {
                 });
                 
                 // Join session and get session_id cookie
-                await axios.get(`/api/session/supervisor_join_session/${examId}`, {
+                await axios.get(`/session/supervisor_join_session/${examId}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
@@ -72,7 +72,7 @@ const MonitoringDashboard = () => {
                 await websocketManager.loadDevice();
 
                 // Get already connected examinees and subscribe to their streams
-                const connectedExamineesResponse = await axios.get(`/api/session/${examId}/examinees`, {
+                const connectedExamineesResponse = await axios.get(`/session/${examId}/examinees`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 
