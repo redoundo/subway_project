@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from fastapi import Request, HTTPException
 from backend.db import user_crud, exam_crud, exam_session_crud
 from backend.db import User, Exam, ExamSession
-
+from pydantic import BaseModel, Field
 import csv
 import uuid
 from io import StringIO
@@ -18,18 +18,35 @@ EMAIL_APP_PWD: str = os.getenv("EMAIL_APP_PWD")
 SMTP_PORT: str = os.getenv("SMTP_PORT")
 SMTP_SERVER: str = os.getenv("SMTP_SERVER")
 EMAIL_ADDR: str = os.getenv("EMAIL_ADDR")
+ALGORITHM: str = os.getenv("ALGORITHM")
 
+class Payload(BaseModel):
+    sub: str = Field(description="user_id", min_length=2)
+    role: str = Field(description="user_role", min_length=2)
+    exp: datetime = Field(description="expire datetime")
 
 def create_jwt(user_id: str, role: str, expires_delta: timedelta) -> tuple[str, datetime]:
     """JWT를 생성하고 만료 시간을 반환합니다."""
     expire = datetime.now(UTC) + expires_delta
-    payload = {
-        "sub": user_id,
-        "role": role,
-        "exp": expire
-    }
-    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+    payload: Payload = Payload(sub=user_id, role=role, exp=expire)
+    token = jwt.encode(*payload, JWT_SECRET, algorithm="HS256")
     return token, expire
+
+
+async def decode_jwt_token(jwt_token: str) -> Payload:
+    try:
+        payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=[ALGORITHM])
+        if datetime.fromtimestamp(payload["exp"]) < datetime.now():
+            raise HTTPException(status_code=401, detail="Token has expired")
+        user_id: str = payload.get("sub")
+        user_role: str = payload.get("role")
+        return Payload(sub=user_id, role=user_role, exp=payload["exp"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 class AuthenticationChecker:
@@ -49,28 +66,13 @@ class AuthenticationChecker:
         if not jwt_token:
             raise HTTPException(status_code=401, detail="Not authenticated, token not found")
 
-        try:
-            payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=["HS256"])
-
-            if datetime.fromtimestamp(payload["exp"]) < datetime.now():
-                raise HTTPException(status_code=401, detail="Token has expired")
-
-            user_id: str = payload.get("sub")
-            user_role: str = payload.get("role")
-
-            if user_role not in self.allowed_roles:
-                raise HTTPException(status_code=403, detail="Permission denied")
-            user : User | None = await user_crud.get_by({"id" : user_id, "role" : user_role})
-            if not user:
-                raise HTTPException(status_code=403, detail="not exist")
-            return user
-
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token has expired")
-        except jwt.InvalidTokenError:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        except jwt.PyJWTError:
-            raise HTTPException(status_code=401, detail="Invalid token")
+        payload = await decode_jwt_token(jwt_token)
+        if payload.role not in self.allowed_roles:
+            raise HTTPException(status_code=403, detail="Permission denied")
+        user: User | None = await user_crud.get(ObjectId(payload.sub))
+        if not user:
+            raise HTTPException(status_code=403, detail="not exist")
+        return user
 
 
 class ExamSessionAuthenticationChecker(AuthenticationChecker):
@@ -118,7 +120,7 @@ class ExamSessionAuthenticationChecker(AuthenticationChecker):
 
         user_info: User = await super().__call__(request)
 
-        query: dict = {"exam.id" : ObjectId(exam_id)}
+        query: dict = {"exam._id" : ObjectId(exam_id)}
         if session_id is not None:
             query["session_id"] = session_id
 

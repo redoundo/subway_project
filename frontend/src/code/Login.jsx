@@ -3,6 +3,13 @@ import axios from 'axios';
 import '../css/Login.css';
 import { useParams, useNavigate } from 'react-router-dom';
 
+
+function setCookie(name, value, exp) {
+    const date = new Date();
+    date.setTime(date.getTime() + exp * 24 * 60 * 60 * 1000);
+    document.cookie = name + '=' + value + ';expires=' + date.toUTCString() + ';path=/';
+}
+
 /**
  * AdminLogin component
  * Handles the login process for administrators.
@@ -26,7 +33,8 @@ export const AdminLogin = () => {
                 invitationToken: null
             });
             console.log('Admin login successful:', response.data);
-
+            setCookie('jwt_token', response.data.token, response.data.expires_at);
+            localStorage.setItem('jwt_token', response.data.token);
             // After a successful login, redirect to the admin dashboard.
             navigate('/admin/dashboard');
         } catch (err) {

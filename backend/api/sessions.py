@@ -86,7 +86,7 @@ async def examinee_join_session(
     if session_id is not None:
         # examinee_crud 를 사용하여 이미 해당 세션에 참여한 응시자인지 확인합니다.
         existing_examinee : Examinee | None = await examinee_crud.get_by(
-            {'session_id': session_id, 'examinee.id': current_user.id}
+            {'session_id': session_id, 'examinee._id': current_user.id}
         )
         if existing_examinee:
             return {"message": "User has already joined the session.", "examinee_info": existing_examinee.model_dump_json()}
@@ -131,7 +131,7 @@ async def supervisor_join_session(
 
         # 세션 준비 완료 로그를 생성합니다.
         log = Logs(
-            user=current_user.to_ref(),
+            user=current_user,
             url_path=f"/session/supervisor_join_session/{exam_id}",
             log_type="SESSION_READY"
         )
@@ -155,7 +155,7 @@ async def get_exist_examinee_infos(
     session_id: Annotated[str, Cookie()]
 ):
     # 동일한 exam_id와 session_id를 가진 모든 Examinee를 가져옵니다.
-    examinees: list[Examinee] = await examinee_crud.get_all_by({
+    examinees: list[Examinee] = await examinee_crud.get_all({
         "exam_id": exam_id,
         "session_id": session_id
     })

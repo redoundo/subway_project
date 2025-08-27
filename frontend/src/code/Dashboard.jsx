@@ -12,7 +12,7 @@ const ExamCard = ({ exam, userType }) => {
         // Logic to create a session
         console.log(`Creating session for exam ${examId}`);
         // Example API call:
-        axios.post(`/api/exams/${examId}/create_session`)
+        axios.post(`/exams/${examId}/create_session`)
           .then(response => alert(response.data + 'Session created and invitations sent!'))
           .catch(error => console.error('Failed to create session', error));
     };
@@ -83,8 +83,9 @@ export const AdminDashboard = () => {
         const fetchExams = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await axios.get('/api/exams/admin', {
-                    headers: { Authorization: `Bearer ${token}` }
+                const jwtToken = localStorage.getItem('jwt_token');
+                const response = await axios.get('/exams/admin', {
+                    headers: { Authorization: `Bearer ${token}` , "jwt_token" : jwtToken}, withCredentials: true
                 });
                 setExams(response.data);
             } catch (err) {
@@ -125,7 +126,7 @@ export const ExamineeDashboard = () => {
             try {
                 const token = localStorage.getItem('token');
                 // 응시 가능한 시험 정보들을 가져옵니다.
-                const response = await axios.get('/api/exams/examinee', {
+                const response = await axios.get('/exams/examinee', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 // Check local storage for pre-check status
@@ -171,7 +172,7 @@ export const ProctorDashboard = () => {
             try {
                 const token = localStorage.getItem('token');
                 // This API endpoint is an assumption based on the documentation.
-                const response = await axios.get('/api/exams/supervisor', {
+                const response = await axios.get('/exams/supervisor', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setExams(response.data);

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Body, Response, Depends
 from pydantic import BaseModel, Field
 import secrets
 from backend.core import create_jwt, AuthenticationChecker
-from backend.db import User, LoginRequest, Logs, user_crud, login_request_crud
+from backend.db import User, LoginRequest, Logs, user_crud, login_request_crud, logs_crud
 from cryptography.fernet import Fernet, InvalidToken
 
 auth_router = APIRouter()
@@ -67,7 +67,7 @@ async def login(response: Response, login_param: LoginRequestModel = Body(...)):
                 detail={"code": "AUTH_INVALID", "message": "제공하신 값 중에 유효하지 않은 값이 있습니다. 확인 후 다시 보내주세요."}
             )
     # 3. 로그인 시도 횟수 제한
-    login_attempt: LoginRequest | None = await login_request_crud.get_by({"user.id" : user.id, "user.pwd" : user.pwd})
+    login_attempt: LoginRequest | None = await login_request_crud.get_by({"user._id" : user.id, "user.pwd" : user.pwd})
     now = datetime.now()
 
     if login_attempt and login_attempt.last_request_time > now - timedelta(minutes=10):
@@ -78,7 +78,7 @@ async def login(response: Response, login_param: LoginRequestModel = Body(...)):
             )
         login_attempt.request_count += 1
         login_attempt.last_request_time = now
-        await login_attempt.save()
+        await  login_request_crud.update(login_attempt.id, login_attempt)
     else:
         # 10분이 지났거나 첫 시도인 경우
         login_attempt : LoginRequest = LoginRequest(
@@ -86,10 +86,9 @@ async def login(response: Response, login_param: LoginRequestModel = Body(...)):
             last_request_time=now,
             request_count=1
         )
-        await login_attempt.save()
-
+        await login_request_crud.create(login_attempt)
     # 6. JWT 생성
-    await login_attempt.delete() # 성공 시 시도 횟수 리셋
+    await login_request_crud.delete(login_attempt.id) # 성공 시 시도 횟수 리셋
     token, expires_at = create_jwt(str(user.id), user.role, timedelta(hours=1))
 
     # 7. 성공 로그 기록
@@ -98,8 +97,7 @@ async def login(response: Response, login_param: LoginRequestModel = Body(...)):
         url_path="/auth/login",
         log_type="LOGIN_SUCCESS"
     )
-    await log_entry.save()
-
+    await logs_crud.create(log_entry)
     response.set_cookie(key="jwt_token", value=token, expires=expires_at)
     return LoginResponseModel(
         token=token,

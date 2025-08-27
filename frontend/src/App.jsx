@@ -5,12 +5,15 @@ import { AdminDashboard, ExamineeDashboard, ProctorDashboard } from './code/Dash
 import AdminExamForm from "./code/AdminExamForm.jsx";
 import PreCheckPage from "./code/PreCheckPage.jsx";
 import MonitoringDashboard from "./code/MonitoringDashboard.jsx";
+import {CookiesProvider} from "react-cookie";
+
 
 import axios from 'axios';
 axios.defaults.baseURL = 'http://localhost:8000/api';
 
 function App() {
   return (
+      <CookiesProvider>
     <Routes>
       {/* Redirect root to admin login */}
       <Route path="/" element={<Navigate to="/admin/login" />} />
@@ -35,6 +38,7 @@ function App() {
       */}
       <Route path="/proctor/monitoring/:examId" element={<MonitoringDashboard />} />
     </Routes>
+        </CookiesProvider>
   );
 }
 
