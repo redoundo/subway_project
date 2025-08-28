@@ -96,13 +96,13 @@ export const UserLogin = () => {
             // It would likely require the invitation token from the URL and the password.
             const response = await axios.post(`/auth/login`, {
                 invitationToken: token,
-                pwd: password, email: email,
+                password: password, email: email,
             });
 
             localStorage.setItem('jwt_token', response.data.token);
             // Similar to admin login, the server should handle session/token management.
             console.log('User login successful:', response.data);
-
+            setCookie('jwt_token', response.data.token, response.data.expires_at);
             // After login, the user should be redirected to their respective dashboard
             // (e.g., examinee pre-check page or proctor monitoring dashboard).
             // The redirect path might be provided in the login response.

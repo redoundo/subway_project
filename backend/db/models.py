@@ -136,14 +136,14 @@ class ExamQuestionSelection(BaseModel):
     location: ExamQuestionSelectionLocation
 
 class ExamQuestion(BaseModel):
-    question_id: str = Field(description="시험 문항 아이디", min_length=5)
+    question_id: str = Field(description="시험 문항 아이디")
     question_index: int = Field(description="시험 문항 번호", gt=0)
     selection: ExamQuestionSelection = Field(description="pdf 를 html 로 바꾼 뒤, 그 위에 버튼을 정해진 위치에 맵핑합니다. ")
 
 class ExamHTML(BaseModel):
     html: str = Field(description="id='page-container' 내부에 있는 id='pf[0-9]+' 값을 가진 div 태그입니다.")
     questions: list[ExamQuestion]
-    page_index: int = Field(min_length=0)
+    page_index: int = Field(gt=0)
 
 class ExamContent(BaseModel):
     """
@@ -176,6 +176,8 @@ class Exam(Document):
     schedules: list[Schedule] = Field(description="각 교시 정보")
     contents: list[ExamContent] = Field(description="각 교시마다 사용할 시험지 내용")
     expected_examinees: list[User]
+    exam_duration_time: int = Field(description="시험 진행 시간(한 교시 당 몇 분 동안 시험을 보는지)")
+    break_time: int = Field(description="쉬는 시간(한 교시마다 몇 분 동안 쉬는지)")
 
     class Settings:
         name = "exams"
@@ -188,11 +190,11 @@ class ExamDetectRule(BaseModel):
     """
     부정 행위를 탐지할 방법 선택
     """
-    detect_gaze_off_screen: bool
-    detect_window_switch: bool
-    detect_prohibited_items: bool
-    detect_multiple_faces: bool
-    detect_audio_noise: bool
+    detect_gaze_off_screen: bool = Field(description="시선 화면 이탈")
+    detect_window_switch: bool = Field(description="창 전환")
+    detect_prohibited_items: bool = Field(description="금지 물품")
+    detect_multiple_faces: bool = Field(description="응시자 외 인원")
+    detect_audio_noise: bool = Field(description="소음 감지")
 
 
 class ExamSession(Document):

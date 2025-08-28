@@ -10,6 +10,7 @@ from backend.db import User, Exam, ExamSession
 from pydantic import BaseModel, Field
 import csv
 import uuid
+from secrets import token_urlsafe
 from io import StringIO
 
 load_dotenv()
@@ -28,14 +29,17 @@ class Payload(BaseModel):
 def create_jwt(user_id: str, role: str, expires_delta: timedelta) -> tuple[str, datetime]:
     """JWT를 생성하고 만료 시간을 반환합니다."""
     expire = datetime.now(UTC) + expires_delta
-    payload: Payload = Payload(sub=user_id, role=role, exp=expire)
-    token = jwt.encode(*payload, JWT_SECRET, algorithm="HS256")
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "exp": expire
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
     return token, expire
-
 
 async def decode_jwt_token(jwt_token: str) -> Payload:
     try:
-        payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=[ALGORITHM])
+        payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=ALGORITHM)
         if datetime.fromtimestamp(payload["exp"]) < datetime.now():
             raise HTTPException(status_code=401, detail="Token has expired")
         user_id: str = payload.get("sub")
@@ -63,6 +67,7 @@ class AuthenticationChecker:
 
     async def __call__(self, request: Request):
         jwt_token = request.cookies.get("jwt_token")
+        print(jwt_token)
         if not jwt_token:
             raise HTTPException(status_code=401, detail="Not authenticated, token not found")
 
@@ -109,17 +114,19 @@ class ExamSessionAuthenticationChecker(AuthenticationChecker):
         exam_id: str | None = request.path_params.get('exam_id')
         if exam_id is None:
             raise HTTPException(status_code=401, detail="The exec_id must exist.")
-
+        print(request.cookies)
         exam: Exam | None = await exam_crud.get(ObjectId(exam_id))
+        print(exam)
         if not exam: # 이 클래스는 시험 세션에 입장했을 때나 시험 세션을 생성할 때만 사용 됩니다. 따라서 exam 은 반드시 db 에 존재해야 합니다.
             raise HTTPException(status_code=404, detail="Exam not found")
 
         session_id: str | None = request.cookies.get('session_id')
+        print(session_id, self.session_id_required)
         if self.session_id_required and (session_id is None):
             raise HTTPException(status_code=401, detail="session_id is required, but does not exist.")
 
         user_info: User = await super().__call__(request)
-
+        print(user_info)
         query: dict = {"exam._id" : ObjectId(exam_id)}
         if session_id is not None:
             query["session_id"] = session_id
@@ -198,8 +205,8 @@ def send_email(recipients: list[dict]):
             msg['Subject'] = f"[{user.get('role')}] Online Exam Invitation"
 
             # Generate unique URL
-            token = uuid.uuid4()
-            url = f'http://localhost:3000/invite/join_exam/{token}'
+            token = "uiq_" + token_urlsafe(32)
+            url = f'http://localhost:5173/invite/join_exam/{token}'
 
             body = f"""
             Hello, {name}

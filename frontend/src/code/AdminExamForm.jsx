@@ -8,7 +8,7 @@ const AdminExamForm = () => {
     const isEditMode = Boolean(examId);
 
     // State
-    const [examInfo, setExamInfo] = useState({ name: '', startTime: '', endTime: '' });
+    const [examInfo, setExamInfo] = useState({ name: '', startTime: '', endTime: '', duration: '', breakTime: '' });
     const [proctors, setProctors] = useState([{ id: 1, name: '', email: '' }]);
     const [examineesFile, setExamineesFile] = useState(null);
     const [examPeriods, setExamPeriods] = useState([{ id: 1, startTime: '', endTime: '', file: null, existingFile: null }]);
@@ -20,19 +20,28 @@ const AdminExamForm = () => {
             const fetchExamData = async () => {
                 setIsLoading(true);
                 try {
-                    const token = localStorage.getItem('token');
-                    const response = await axios.get(`/api/exams/admin/get_exam/${examId}`, {
-                        headers: { Authorization: `Bearer ${token}` }
+                    const jwtToken = localStorage.getItem('jwt_token');
+                    const response = await axios.get(`/exams/admin/get_exam/${examId}`, {
+                        headers: { "jwt_token" : jwtToken}, withCredentials: true
                     });
-                    const { name, startTime, endTime, proctors, papers } = response.data;
-                    setExamInfo({ name, startTime: new Date(startTime).toISOString().slice(0, 16), endTime: new Date(endTime).toISOString().slice(0, 16) });
-                    setProctors(proctors.length ? proctors.map((p, i) => ({ ...p, id: i + 1 })) : [{ id: 1, name: '', email: '' }]);
-                    setExamPeriods(papers.length ? papers.map((p, i) => ({
+                    const data = response.data;
+                    const schedules = Array.isArray(data.schedules) ? data.schedules : [];
+                    const proctors = Array.isArray(data.proctors) ? data.proctors : [];
+
+                    setExamInfo({
+                        name: data.exam_title || '',
+                        startTime: data.exam_start_datetime ? new Date(data.exam_start_datetime).toISOString().slice(0, 16) : '',
+                        endTime: data.exam_end_datetime ? new Date(data.exam_end_datetime).toISOString().slice(0, 16) : '',
+                        duration: data.exam_duration_time ?? '',
+                        breakTime: data.break_time ?? ''
+                    });
+                    setProctors(proctors.length ? proctors.map((p, i) => ({ id: i + 1, name: p.name, email: p.email })) : [{ id: 1, name: '', email: '' }]);
+                    setExamPeriods(schedules.length ? schedules.map((s, i) => ({
                         id: i + 1,
-                        startTime: new Date(p.startTime).toISOString().slice(0, 16),
-                        endTime: new Date(p.endTime).toISOString().slice(0, 16),
+                        startTime: s.start_datetime ? new Date(s.start_datetime).toISOString().slice(0, 16) : '',
+                        endTime: s.end_datetime ? new Date(s.end_datetime).toISOString().slice(0, 16) : '',
                         file: null,
-                        existingFile: p.fileUrl // Assuming the API provides a URL to the existing file
+                        existingFile: null
                     })) : [{ id: 1, startTime: '', endTime: '', file: null, existingFile: null }]);
                 } catch (err) {
                     console.error('Failed to fetch exam data:', err);
@@ -74,26 +83,23 @@ const AdminExamForm = () => {
         setIsLoading(true);
 
         const formData = new FormData();
-        formData.append('name', examInfo.name);
-        formData.append('startTime', new Date(examInfo.startTime).toISOString());
-        formData.append('endTime', new Date(examInfo.endTime).toISOString());
-        if (examineesFile) formData.append('examinees', examineesFile);
-        
-        formData.append('proctors', JSON.stringify(proctors.map(({ name, email }) => ({ name, email }))));
-        
-        const periodsMeta = examPeriods.map(p => ({
-            startTime: new Date(p.startTime).toISOString(),
-            endTime: new Date(p.endTime).toISOString(),
-        }));
-        formData.append('papers', JSON.stringify(periodsMeta));
+        formData.append('title', examInfo.name);
+        formData.append('start_time', new Date(examInfo.startTime).toISOString());
+        formData.append('end_time', new Date(examInfo.endTime).toISOString());
+        formData.append('exam_duration_time', String(examInfo.duration ?? ''));
+        formData.append('break_time', String(examInfo.breakTime ?? ''));
+        if (examineesFile) formData.append('examinee_infos', examineesFile);
+
+        formData.append('supervisor_infos', JSON.stringify(proctors.map(({ name, email }) => ({ name, email }))));
+
         examPeriods.forEach(period => {
-            if (period.file) formData.append('paper_files', period.file);
+            if (period.file) formData.append('exam_papers', period.file);
         });
 
         try {
-            const token = localStorage.getItem('token');
-            const config = { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` } };
-            const url = isEditMode ? `/api/exams/admin/update_exam/${examId}` : '/api/exams/admin/create_exams';
+            const jwtToken = localStorage.getItem('jwt_token');
+            const config = { headers: { 'Content-Type': 'multipart/form-data', "jwt_token" : jwtToken }, withCredentials: true };
+            const url = isEditMode ? `/exams/admin/update_exam/${examId}` : '/exams/admin/create_exams';
             const method = isEditMode ? 'put' : 'post';
             
             await axios[method](url, formData, config);
@@ -128,6 +134,14 @@ const AdminExamForm = () => {
                     <div className="form-group">
                         <label>End Time</label>
                         <input type="datetime-local" name="endTime" value={examInfo.endTime} onChange={handleExamInfoChange} required />
+                    </div>
+                    <div className="form-group">
+                        <label>Exam Duration (minutes)</label>
+                        <input type="number" name="duration" value={examInfo.duration} onChange={handleExamInfoChange} placeholder="e.g., 50" required />
+                    </div>
+                    <div className="form-group">
+                        <label>Break Time (minutes)</label>
+                        <input type="number" name="breakTime" value={examInfo.breakTime} onChange={handleExamInfoChange} placeholder="e.g., 10" />
                     </div>
                 </fieldset>
 

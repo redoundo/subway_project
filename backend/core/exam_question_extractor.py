@@ -156,7 +156,7 @@ def convert_pdf_to_html_with_wsl(
         Path(output_html_path).parent.mkdir(parents=True, exist_ok=True)
 
     system = platform.system().lower()
-    pdf2html = shutil.which("pdf2htmlEX")
+    pdf2html = shutil.which("pdf2htmlEX.AppImage")
     use_wsl = False
 
     if system.startswith("windows"):
@@ -183,7 +183,7 @@ def convert_pdf_to_html_with_wsl(
         wsl_out = to_wsl(str(Path(output_html_path).resolve()))
         cmd = [
             "wsl",
-            "pdf2htmlEX",
+            "pdf2htmlEX.AppImage",
             f"--zoom", str(zoom),
             "--embed", embed,
             "--dest-dir", os.path.dirname(wsl_out) or ".",
