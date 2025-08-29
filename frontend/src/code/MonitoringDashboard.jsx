@@ -48,10 +48,10 @@ const MonitoringDashboard = () => {
     useEffect(() => {
         const setupMonitoring = async () => {
             try {
-                const token = localStorage.getItem('token');
-                // It's better to fetch exam details to get the full examinee list
-                const examDetailsResponse = await axios.get(`/exams/admin/get_exam/${examId}`, {
-                     headers: { Authorization: `Bearer ${token}` }
+                const jwtToken = localStorage.getItem('jwt_token');
+                // 현재 들어온 시험 세션 정보를 가져옵니다.
+                const examDetailsResponse = await axios.get(`/exams/get_exam/${examId}`, {
+                     headers: { jwt_token: jwtToken }, withCredentials: true
                 });
                 const fetchedExam = examDetailsResponse.data;
                 setExam(fetchedExam);
@@ -63,17 +63,21 @@ const MonitoringDashboard = () => {
                 });
                 
                 // Join session and get session_id cookie
-                await axios.get(`/session/supervisor_join_session/${examId}`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                const res = await axios.get(`/session/supervisor_join_session/${examId}`, {
+                    headers: { jwt_token: jwtToken }, withCredentials: true
                 });
+                console.log(res);
+                // TODO: 서버에서 fastapi.Response.set_cookie(key="session_id", value=session.session_id) 를 해주고는 있지만, 개발자 창을 보면 아무 쿠키가 없습니다...path 의 문제일 가능성이 높다고 생각합니다.
+                localStorage.setItem('session_id', res.data.session_id);
 
                 // Connect to media server
                 await websocketManager.connect(SERVER_URLS.MEDIA_SERVER_URL);
                 await websocketManager.loadDevice();
-
+                // TODO: 불필요한 코드입니다. react-cookie 도입이 시급. axios 요청을 보낼 때 특정 flag 로 사용할 쿠키를 조절하거나 추가 여부를 결정할 수 있는 방법을 모색해야 합니다.
+                const sessionId = localStorage.getItem('session_id');
                 // Get already connected examinees and subscribe to their streams
                 const connectedExamineesResponse = await axios.get(`/session/${examId}/examinees`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { jwt_token: jwtToken, session_id: sessionId }, withCredentials: true
                 });
                 
                 const connectedIds = connectedExamineesResponse.data.map(ex => ex.id.toString());

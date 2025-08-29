@@ -86,6 +86,7 @@ export const UserLogin = () => {
     // In a real application, the invitation token would be extracted from the URL.
     // For example, if the URL is /invite/join_exam/<token>, you'd use:
     const { token } = useParams(); // from react-router-dom
+    localStorage.setItem("token", token); // TODO : 이것도 cookie 에 넣어야 하지만 일단, 로컬 스토리지에 추가하겠습니다.
     const navigate = useNavigate();
 
     const handleSubmit = async () => {

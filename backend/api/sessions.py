@@ -48,7 +48,8 @@ async def create_session(
             "email": examinee_user.email,
             "password": examinee_user.pwd,
             "name": examinee_user.name,
-            "role": "examinee"
+            "role": "examinee",
+            "id" : str(examinee_user.id)
         })
 
     # 감독관 정보 추가
@@ -57,7 +58,8 @@ async def create_session(
             "email": proctor_user.email,
             "password": proctor_user.pwd,
             "name": proctor_user.name,
-            "role": "supervisor"
+            "role": "supervisor",
+            "id" : str(proctor_user.id)
         })
 
     if recipients:

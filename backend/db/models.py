@@ -138,7 +138,7 @@ class ExamQuestionSelection(BaseModel):
 class ExamQuestion(BaseModel):
     question_id: str = Field(description="시험 문항 아이디")
     question_index: int = Field(description="시험 문항 번호", gt=0)
-    selection: ExamQuestionSelection = Field(description="pdf 를 html 로 바꾼 뒤, 그 위에 버튼을 정해진 위치에 맵핑합니다. ")
+    selection: list[ExamQuestionSelection] = Field(description="pdf 를 html 로 바꾼 뒤, 그 위에 버튼을 정해진 위치에 맵핑합니다. ")
 
 class ExamHTML(BaseModel):
     html: str = Field(description="id='page-container' 내부에 있는 id='pf[0-9]+' 값을 가진 div 태그입니다.")

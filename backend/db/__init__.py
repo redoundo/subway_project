@@ -13,9 +13,9 @@ from backend.db.model_functions import exam_crud
 # This helps control the namespace and makes the package's API explicit.
 __all__ = [
     # database.py
-    'lifespan', "user_crud", "exam_session_crud", "login_request_crud", "examinee_crud",
+    'lifespan', "exam_session_crud", "login_request_crud", "examinee_crud",
     "ExamDetectRule", "ExamSession", "LoginRequest", "User", "Examinee", "MediaFiles", "Verifications", "Logs",
     "EventData", "EventLog", "verifications_crud", "logs_crud", "event_log_crud", "MongoCRUD",
-    "ExamQuestionSelection", "ExamHTML", "ExamQuestionSelectionLocation",
+    "ExamQuestionSelection", "ExamHTML", "ExamQuestionSelectionLocation", "user_crud",
     "Exam", "Schedule", "ExamContent", "ExamQuestion", "exam_crud", "LogContent"
 ]

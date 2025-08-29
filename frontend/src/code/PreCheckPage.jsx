@@ -49,7 +49,7 @@ const PreCheckPage = () => {
     };
 
     const handleWebcamCheck = async () => {
-        if (micStatus !== 'success') return; // 여기에서도 다른 시험에서 왔는지 확인해야 할까?
+        if (micStatus !== 'success') return;
         setWebcamStatus('checking');
         setError('');
         try {
@@ -79,6 +79,7 @@ const PreCheckPage = () => {
         if (videoRef.current && canvasRef.current) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
+            // 신분증을 얼굴 옆에 둔 상태에서 checking 버튼을 누르면 스크린 샷을 그립니다.
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const context = canvas.getContext('2d');
@@ -89,11 +90,12 @@ const PreCheckPage = () => {
                 formData.append('image', blob, 'identity.jpg');
 
                 try {
-                    const token = localStorage.getItem('token');
-                    await axios.post('/api/identity-verification', formData, {
+                    // TODO : jwt_token 는 localStorage 가 아니라 cookie 에 들어가야 합니다. react-cookie 를 사용해야 하는데...
+                    const jwtToken = localStorage.getItem('jwt_token');
+                    await axios.post('/pre-checks/identity-verification', formData, {
                         headers: {
                             'Content-Type': 'multipart/form-data',
-                            'Authorization': `Bearer ${token}`
+                            jwt_token: jwtToken
                         }
                     });
                     setIdentityStatus('success');
@@ -109,8 +111,11 @@ const PreCheckPage = () => {
                     if (newAttempts >= 5) {
                         setError('Identity verification failed 5 times. Redirecting to login.');
                         setIdentityStatus('error');
-                        localStorage.removeItem('token');
-                        setTimeout(() => navigate('/login'), 3000);
+                        // TODO : jwt_token, token 전부 localStorage 가 아니라 cookie 에 들어가야 합니다. react-cookie 를 사용해야 하는데...
+                        localStorage.removeItem('jwt_token');
+                        const tok = localStorage.getItem("token");
+                        // 5 번 이상 실패하면 jwt_token 을 지우고 맨 처음 로그인 했던 화면으로 이동합니다.
+                        setTimeout(() => navigate(`/invite/join_exam/${tok}`), 3000);
                     } else {
                         setError(`Verification failed. Please try again. (Attempt ${newAttempts}/5)`);
                         setIdentityStatus('retrying');

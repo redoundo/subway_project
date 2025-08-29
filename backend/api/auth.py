@@ -3,12 +3,19 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Body, Response, Depends
 from pydantic import BaseModel, Field
-import secrets
+import secrets, os, base64
+from dotenv import load_dotenv
 from backend.core import create_jwt, AuthenticationChecker
 from backend.db import User, LoginRequest, Logs, user_crud, login_request_crud, logs_crud
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+
+load_dotenv()
 
 auth_router = APIRouter()
+
+SALT = os.getenv("SALT")
 
 # --- Request/Response Models ---
 
@@ -52,10 +59,17 @@ async def login(response: Response, login_param: LoginRequestModel = Body(...)):
                 status_code=401,
                 detail={"code": "AUTH_INVALID", "message": "로그인에 필요한 값들을 전부 제공해주세요."}
             )
-        cipher_suite = Fernet(login_param.password)
+        kdf_decrypt = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,  # Fernet 키의 길이인 32바이트로 설정
+            salt=SALT.encode("utf-8"),
+            iterations=480000,  # 반복 횟수 (NIST 권장 10,000 이상, 높을수록 안전)
+        )
+        derived_key_decrypt = kdf_decrypt.derive(login_param.password.encode('utf-8'))
+        key_decrypt = base64.urlsafe_b64encode(derived_key_decrypt)
+        cipher_suite = Fernet(key_decrypt)
         try:
-            decrypted_user_id_bytes = cipher_suite.decrypt(login_param.invitationToken)
-            decrypted_user_id: str = decrypted_user_id_bytes.decode('utf-8')
+            decrypted_user_id: str = cipher_suite.decrypt(login_param.invitationToken).decode('utf-8')
             if decrypted_user_id != str(user.id):
                 raise HTTPException(
                     status_code=401,

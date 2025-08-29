@@ -109,10 +109,10 @@ def extract_questions_options_positions_by_page(pdf_path: str) -> Dict[str, Dict
                 for inst in instances:
                     # Keep only instances whose rect is within the block rect
                     if (
-                        block_rect.x0 > inst.x0
-                        or inst.y0 < block_rect.y0
-                        or inst.x1 > block_rect.x1
-                        or inst.y1 > block_rect.y1
+                            block_rect.x0 > inst.x0
+                            or inst.y0 < block_rect.y0
+                            or inst.x1 > block_rect.x1
+                            or inst.y1 > block_rect.y1
                     ):
                         continue
 
@@ -185,9 +185,7 @@ def convert_pdf_to_html_with_wsl(
             "wsl",
             "pdf2htmlEX.AppImage",
             f"--zoom", str(zoom),
-            "--embed", embed,
             "--dest-dir", os.path.dirname(wsl_out) or ".",
-            "--optimize-text", "1",
             wsl_pdf,
             os.path.basename(wsl_out),
         ]
@@ -197,9 +195,7 @@ def convert_pdf_to_html_with_wsl(
         cmd = [
             pdf2html,
             f"--zoom", str(zoom),
-            "--embed", embed,
             "--dest-dir", str(Path(output_html_path).parent),
-            "--optimize-text", "1",
             pdf_path,
             str(Path(output_html_path).name),
         ]

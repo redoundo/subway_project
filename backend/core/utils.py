@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, UTC
-import jwt, os
+import jwt, os, base64
 from typing import List, Literal
-
+from cryptography.fernet import Fernet
 from bson import ObjectId
 from dotenv import load_dotenv
 from fastapi import Request, HTTPException
@@ -10,8 +10,10 @@ from backend.db import User, Exam, ExamSession
 from pydantic import BaseModel, Field
 import csv
 import uuid
-from secrets import token_urlsafe
+
 from io import StringIO
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
 
 load_dotenv()
 JWT_SECRET: str = os.getenv("JWT_SECRET")
@@ -20,6 +22,7 @@ SMTP_PORT: str = os.getenv("SMTP_PORT")
 SMTP_SERVER: str = os.getenv("SMTP_SERVER")
 EMAIL_ADDR: str = os.getenv("EMAIL_ADDR")
 ALGORITHM: str = os.getenv("ALGORITHM")
+SALT: str = os.getenv("SALT")
 
 class Payload(BaseModel):
     sub: str = Field(description="user_id", min_length=2)
@@ -195,18 +198,27 @@ def send_email(recipients: list[dict]):
             email = user.get("email")
             password = user.get("password")
             name = user.get("name")
-
-            if not all([email, password, name]):
+            id_ = user.get("id")
+            if not all([email, password, name, id_]):
                 continue
 
             msg = MIMEMultipart()
             msg['From'] = EMAIL_ADDR
             msg['To'] = email
             msg['Subject'] = f"[{user.get('role')}] Online Exam Invitation"
-
-            # Generate unique URL
-            token = "uiq_" + token_urlsafe(32)
-            url = f'http://localhost:5173/invite/join_exam/{token}'
+            # 비밀 번호를 Fernet 이 사용 가능한 url-safe 한 키로 만들기 위한 코드
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,  # Fernet 키의 길이인 32바이트로 설정
+                salt=SALT.encode("utf-8"),
+                iterations=480000,  # 반복 횟수 (NIST 권장 10,000 이상, 높을수록 안전)
+            )
+            derived_key = kdf.derive(password.encode('utf-8'))
+            # 이 과정을 거치지 않으면 secrets.token_urlsafe(32) 를 사용해도 에러가 발생합니다.
+            key64 = base64.urlsafe_b64encode(derived_key)
+            f = Fernet(key64)
+            encrypted_token = f.encrypt(id_.encode('utf-8'))
+            url = f'http://localhost:5173/invite/join_exam/{encrypted_token.decode("utf-8")}'
 
             body = f"""
             Hello, {name}

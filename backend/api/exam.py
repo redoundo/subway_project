@@ -75,6 +75,7 @@ async def get_exams_for_admin():
     exams: list[Exam] = await exam_crud.get_all(limit=1000)
     exam_sessions: list[ExamSession] = await exam_session_crud.get_all(limit=1000)
 
+    # 이미 exam_session 에 있는 exam 들은 제외.
     # TODO : 너무 난잡함. 더 나은 방법이 있는지 확인 필요.
     exam_sessions_exam_ids: list[str] = [str(exs.exam.id) for exs in exam_sessions]
     exams = [ex for ex in exams if str(ex.id) not in exam_sessions_exam_ids]
@@ -85,8 +86,8 @@ async def get_exams_for_admin():
 
 
 @exam_router.get(
-    "/admin/get_exam/{exam_id}", response_model=Exam,
-    dependencies=[Depends(AuthenticationChecker(role=["admin"]))]
+    "/get_exam/{exam_id}", response_model=Exam,
+    dependencies=[Depends(AuthenticationChecker(role=["admin", "examinee", "supervisor"]))]
 )
 async def get_exam_for_admin(exam_id: str):
     """
@@ -104,7 +105,7 @@ async def get_exams_for_supervisor(user_info: User = Depends(AuthenticationCheck
     Returns Exam information for which the supervisor is assigned as a proctor.
     """
     # Find sessions where the current supervisor is a proctor
-    return  await exam_session_crud.get_all(query={"proctors._id": user_info.id}, limit=1000)
+    return  await exam_session_crud.get_all(query={"exam.proctors._id": user_info.id}, limit=1000)
 
 
 @exam_router.get("/examinee", response_model=List[ExamSession])
@@ -288,6 +289,11 @@ async def create_exams(
                     q_index = int(qid_str.split("@_@")[0])
                 except Exception:
                     q_index = 0
+                eq = ExamQuestion(
+                    question_id=qid_str,
+                    question_index=q_index,
+                    selection=[],
+                )
                 for opt_key, rect in opts.items():
                     try:
                         sel_index = int(opt_key)
@@ -304,12 +310,8 @@ async def create_exams(
                         selection_index=sel_index,
                         location=loc,
                     )
-                    eq = ExamQuestion(
-                        question_id=qid_str,
-                        question_index=q_index,
-                        selection=sel,
-                    )
-                    questions_list.append(eq)
+                    eq.selection.append(sel)
+                questions_list.append(eq)
             exam_htmls.append(ExamHTML(html=page_html, questions=questions_list, page_index=p_idx))
 
         if not exam_htmls:
@@ -322,6 +324,11 @@ async def create_exams(
                     q_index = int(qid_str)
                 except Exception:
                     q_index = 0
+                eq = ExamQuestion(
+                    question_id=qid_str,
+                    question_index=q_index,
+                    selection=[],
+                )
                 for opt_key, rect in opts.items():
                     try:
                         sel_index = int(opt_key)
@@ -338,12 +345,8 @@ async def create_exams(
                         selection_index=sel_index,
                         location=loc,
                     )
-                    eq = ExamQuestion(
-                        question_id=qid_str,
-                        question_index=q_index,
-                        selection=sel,
-                    )
-                    questions_list.append(eq)
+                    eq.selection.append(sel)
+                questions_list.append(eq)
             exam_htmls.append(ExamHTML(html=html_str, questions=questions_list, page_index=p_idx))
 
         outer_html = html_str
@@ -486,6 +489,11 @@ async def update_exams(
                         q_index = int(qid_str)
                     except Exception:
                         q_index = 0
+                    eq = ExamQuestion(
+                        question_id=qid_str,
+                        question_index=q_index,
+                        selection=[],
+                    )
                     for opt_key, rect in opts.items():
                         try:
                             sel_index = int(opt_key)
@@ -502,12 +510,8 @@ async def update_exams(
                             selection_index=sel_index,
                             location=loc,
                         )
-                        eq = ExamQuestion(
-                            question_id=qid_str,
-                            question_index=q_index,
-                            selection=sel,
-                        )
-                        questions_list.append(eq)
+                        eq.selection.append(sel)
+                    questions_list.append(eq)
                 exam_htmls.append(ExamHTML(html=page_html, questions=questions_list, page_index=p_idx))
 
             if not exam_htmls:
@@ -520,6 +524,11 @@ async def update_exams(
                         q_index = int(qid_str)
                     except Exception:
                         q_index = 0
+                    eq = ExamQuestion(
+                        question_id=qid_str,
+                        question_index=q_index,
+                        selection=[],
+                    )
                     for opt_key, rect in opts.items():
                         try:
                             sel_index = int(opt_key)
@@ -536,12 +545,8 @@ async def update_exams(
                             selection_index=sel_index,
                             location=loc,
                         )
-                        eq = ExamQuestion(
-                            question_id=qid_str,
-                            question_index=q_index,
-                            selection=sel,
-                        )
-                        questions_list.append(eq)
+                        eq.selection.append(sel)
+                    questions_list.append(eq)
                 exam_htmls.append(ExamHTML(html=html_str, questions=questions_list, page_index=p_idx))
 
             outer_html = html_str

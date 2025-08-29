@@ -12,8 +12,8 @@ sys.path.append(path + "/backend/core")
 sys.path.append(path + "/backend/db")
 
 from backend.db import lifespan
-from backend.api import auth_router, exam_router, sessions_router, reports_router
-from backend.api import sio
+from backend.api import auth_router, exam_router, sessions_router, reports_router, precheck_router
+from backend.api import sio, on_exam_router
 
 # FastAPI application
 app = FastAPI(lifespan=lifespan)
@@ -32,6 +32,8 @@ app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(exam_router, prefix="/api/exams", tags=["Exams"])
 app.include_router(sessions_router, prefix="/api/sessions", tags=["Sessions"])
 app.include_router(reports_router, prefix="/api/reports", tags=["Reports"])
+app.include_router(precheck_router, prefix="/api/pre-checks", tags=["Pre-checks"])
+app.include_router(on_exam_router, prefix="/api/on-exams", tags=["On-Exams"])
 
 # Create Socket.IO ASGI app
 socket_app = socketio.ASGIApp(sio)

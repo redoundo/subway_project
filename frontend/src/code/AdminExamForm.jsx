@@ -21,7 +21,7 @@ const AdminExamForm = () => {
                 setIsLoading(true);
                 try {
                     const jwtToken = localStorage.getItem('jwt_token');
-                    const response = await axios.get(`/exams/admin/get_exam/${examId}`, {
+                    const response = await axios.get(`/exams/get_exam/${examId}`, {
                         headers: { "jwt_token" : jwtToken}, withCredentials: true
                     });
                     const data = response.data;
