@@ -9,8 +9,10 @@ import axios from 'axios';
 
 /**
  * 데이터 모델 참고(요약)
- * Exam.contents[0] => {
+ * ExamSession.contents[0] => {
  *   outer_html: string, // id="page-container" 포함한 외곽 HTML
+ *   html_width : float, // 기본 가로 길이인 1095.25
+ *   html_height: float, // 기본 세로 높이인 1548.95 * 시험 페이지 수
  *   htmls: [{
  *     page_index: number, // 1-based
  *     html: string,       // id='pf{page_index}' 페이지 div HTML
@@ -27,7 +29,7 @@ import axios from 'axios';
  * }
  */
 
-const TEST_DRIVE_PATH = '/on-exams/test_drive/68b130a2c534109263d40474';
+const TEST_DRIVE_PATH = '/on-exams/test_drive/68b65d3e0f3af74afd0502da';
 
 function ExamPageTestDrive() {
   const wrapperRef = useRef(null); // React overlay 기준 컨테이너
@@ -60,17 +62,22 @@ function ExamPageTestDrive() {
     // 3) page-container 안에 각 페이지 HTML 삽입
     const pageContainer = shadow.getElementById('page-container');
     if (pageContainer) {
+      pageContainer.style.overflow = "visible";
+      pageContainer.style.height = `${Math.ceil(1548.300000 * content.htmls.length) }px`;
       pageContainer.innerHTML = (content.htmls || []).map(h => h.html).join('');
     }
   }, [content]);
-
+  const diff = 1.333321996963399;
   // 오버레이 포지션 정보
   const [overlays, setOverlays] = useState([]);
 
   const recomputeOverlays = useCallback(() => {
     if (!content || !shadowRef.current || !wrapperRef.current) return;
     const shadow = shadowRef.current;
-    const wrapperRect = wrapperRef.current.getBoundingClientRect();
+    const wrapper = wrapperRef.current;
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const scrollX = wrapper.scrollLeft;
+    const scrollY = wrapper.scrollTop;
 
     const items = [];
     for (const page of content.htmls || []) {
@@ -78,21 +85,21 @@ function ExamPageTestDrive() {
       const pageEl = shadow.getElementById(pageId);
       if (!pageEl) continue;
 
+      // viewport 기준 좌표를 컨텐츠 기준 좌표로 변환
       const pageRect = pageEl.getBoundingClientRect();
-      const baseLeft = pageRect.left - wrapperRect.left;
-      const baseTop = pageRect.top - wrapperRect.top;
-      console.log(pageRect);
-      console.log(wrapperRect);
+      const baseLeft = pageRect.left - wrapperRect.left + scrollX;
+      const baseTop = pageRect.top - wrapperRect.top + scrollY;
+
       for (const q of page.questions || []) {
         for (const sel of q.selection || []) {
           const { x0, y0, x1, y1 } = sel.location || {};
           if ([x0, y0, x1, y1].some(v => typeof v !== 'number')) continue;
 
-          const left = baseLeft + x0;
-          const top = baseTop + y0;
-          const width = Math.max(18, x1 - x0); // 클릭 용이성을 위해 최소 크기 보정
-          const height = Math.max(18, y1 - y0);
-          console.log(left, top, width, height);
+          const left = Math.floor(baseLeft + x0 / diff);
+          const top = Math.floor(baseTop + y0 / diff);
+          const width = 8;
+          const height = 8;
+
           items.push({
             id: `${q.question_id}-${sel.selection_index}-${page.page_index}`,
             question_id: q.question_id,
@@ -114,11 +121,17 @@ function ExamPageTestDrive() {
   useEffect(() => {
     const onResize = () => recomputeOverlays();
     const onScroll = () => recomputeOverlays();
+
     window.addEventListener('resize', onResize);
-    window.addEventListener('scroll', onScroll, true);
+    // 윈도우 스크롤(마우스 휠/가운데 버튼 자동 스크롤 포함)에도 반응
+    window.addEventListener('scroll', onScroll);
+    const wrapper = wrapperRef.current;
+    if (wrapper) wrapper.addEventListener('scroll', onScroll);
+
     return () => {
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('scroll', onScroll);
+      if (wrapper) wrapper.removeEventListener('scroll', onScroll);
     };
   }, [recomputeOverlays]);
 
@@ -144,7 +157,6 @@ function ExamPageTestDrive() {
         position: 'relative',
         width: '100vw',
         height: '100vh',
-        overflow: 'auto',
         background: '#f7f7f7',
       }}
     >
@@ -155,8 +167,9 @@ function ExamPageTestDrive() {
           position: 'relative',
           zIndex: 1,
           display: 'block',
-          width: '100vw', height: '100vh',
           margin: '20px auto',
+          width: '100vw',
+          height: (content ?? null) === null ? 'fit-content' : content.html_height,
           boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
         }}
       />
@@ -167,8 +180,8 @@ function ExamPageTestDrive() {
           position: 'absolute',
           left: 0,
           top: 0,
-          width: '100%',
-          height: '100%',
+          width: (content ?? null) === null ? '100%' : content.html_width,
+          height: (content ?? null) === null ? '100%' : content.html_height,
           zIndex: 2,
           pointerEvents: 'none', // 컨테이너는 입력 통과, 버튼만 활성화
         }}
@@ -186,7 +199,7 @@ function ExamPageTestDrive() {
                 top: item.top,
                 width: item.width,
                 height: item.height,
-                borderRadius: 6,
+                borderRadius: 10,
                 border: isSelected ? '2px solid #2563eb' : '2px solid rgba(0,0,0,0.25)',
                 background: isSelected ? 'rgba(37, 99, 235, 0.15)' : 'rgba(255,255,255,0.4)',
                 color: '#111',
@@ -198,7 +211,8 @@ function ExamPageTestDrive() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 userSelect: 'none',
-                backdropFilter: 'blur(2px)'
+                backdropFilter: 'blur(2px)',
+                padding: "7px",
               }}
             >
               {item.selection_index}

@@ -172,3 +172,25 @@ async def get_exist_examinee_infos(
     ]
 
     return examinee_infos
+
+@sessions_router.get(
+    path = "/get_exam_content/{exam_id}",
+    description="응시할 시험 문제들을 제공합니다. 시험 화면에 입장할 때 바로 호출 됩니다."
+)
+async def get_exam_content(
+        exam_id: str,
+        info: tuple[User, ExamSession] = Depends(
+            ExamSessionAuthenticationChecker(role=["examinee"])
+        ),
+):
+    return
+
+
+@sessions_router.post("/submit/{exam_id}")
+async def submit_exam_answers(
+        exam_id: str,
+        info: tuple[User, ExamSession] = Depends(
+            ExamSessionAuthenticationChecker(role=["examinee"])
+        ),
+):
+    return

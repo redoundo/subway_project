@@ -13,3 +13,5 @@ on_exam_router = APIRouter()
 async def exam_paper_screen_test(exam_id: str):
     exam: Exam | None = await exam_crud.get_by({"_id": ObjectId(exam_id)})
     return exam.model_dump() if exam is not None else {}
+
+

@@ -4,6 +4,7 @@ import axios from 'axios';
 import useStatusStore from './store/statusStore.js'; // Import the Zustand store
 import '../css/PreCheckPage.css';
 
+
 const PreCheckPage = () => {
     const { examId_ } = useParams();
     const navigate = useNavigate();
@@ -31,6 +32,36 @@ const PreCheckPage = () => {
             }
         };
     }, [stream]);
+
+    // Auto-reconnect streams when entering the page if previous checks were successful
+    useEffect(() => {
+        const reconnectIfNeeded = async () => {
+            try {
+                // Prefer full media stream if webcam check previously succeeded
+                if (!stream && webcamStatus === 'success') {
+                    const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    setStream(mediaStream);
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = mediaStream;
+                    }
+                    return;
+                }
+                // Otherwise, reconnect audio-only if mic check previously succeeded
+                if (!stream && micStatus === 'success') {
+                    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    setStream(audioStream);
+                }
+            } catch (err) {
+                console.error('Auto-reconnect for pre-check media failed:', err);
+                // Do not alter existing statuses; just surface an informational error
+                setError('Could not automatically reconnect media devices.');
+            }
+        };
+
+        reconnectIfNeeded();
+        // Only attempt when statuses change and no stream is active
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [webcamStatus, micStatus]);
 
 
     const handleMicCheck = async () => {
@@ -92,14 +123,15 @@ const PreCheckPage = () => {
                 try {
                     // TODO : jwt_token 는 localStorage 가 아니라 cookie 에 들어가야 합니다. react-cookie 를 사용해야 하는데...
                     const jwtToken = localStorage.getItem('jwt_token');
-                    await axios.post('/pre-checks/identity-verification', formData, {
+                    const res = await axios.post('/pre-checks/identity-verification', formData, {
                         headers: {
                             'Content-Type': 'multipart/form-data',
                             jwt_token: jwtToken
-                        }
+                        }, withCredentials: true
                     });
+                    console.log(res.data.result);
                     setIdentityStatus('success');
-                    setPreCheckComplete(true);
+                    setPreCheckComplete(res.data.result);
                     if (stream) {
                         stream.getTracks().forEach(track => track.stop());
                     }

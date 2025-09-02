@@ -273,7 +273,7 @@ async def create_exams(
         # 또다른 regex 의 패턴인 `<div[^>]*id=\"pf[0-9]+\"[^>]*>.*?</div>[\n ]*?</div>[\n ]*?(?=<div class=\"loading-indicator\">)` 는
         # <div id="page-container"> 태그가 가진 마지막 태그인 <div id="pf[0-9]+" class="pf w0 h0" data-page-no="[0-9]+">pdf 내용...</div> 태그를 찾기 위해 사용됩니다. 첫 번째 패턴은 맨 마지막 태그를 찾지 못하니까요.
         # 그래서 <div id="page-container"> 의 닫힘 </div> 태그를 추가하고 <div class="loading-indicator"> 를 기준으로 하여 맨 마지막 태그를 찾습니다.
-        for m in _re.finditer(r"<div[^>]*id=\"pf[0-9]+\"[^>]*>.*?</div>[\n ]*?(?=<div id=\"pf)|<div[^>]*id=\"pf[0-9]+\"[^>]*>.*?</div>[\n ]*?</div>[\n ]*?(?=<div class=\"loading-indicator\">)", html_str, flags=_re.DOTALL | _re.IGNORECASE):
+        for m in _re.finditer(r"<div[^>]*id=\"pf[0-9a-zA-Z]+\"[^>]*>.*?</div>[\n ]*?(?=<div id=\"pf)|<div[^>]*id=\"pf[0-9a-zA-Z]+\"[^>]*>.*?</div>[\n ]*?</div>[\n ]*?(?=<div class=\"loading-indicator\">)", html_str, flags=_re.DOTALL | _re.IGNORECASE):
             page_divs.append(m.group())
         if len(page_divs) > 1:
             # 이 코드가 바로 <div id="page-container"> 의 닫음 태그를 삭제하는 코드입니다.
@@ -281,12 +281,13 @@ async def create_exams(
         # Build ExamHTMLs with questions from pages_map
         exam_htmls: List[ExamHTML] = []
         for p_idx, page_html in enumerate(page_divs, start=1):
-            page_key = str(p_idx) + "@_@" + str(uuid4())
+            real_key = _re.match(r"<div id=\"pf[0-9a-zA-Z]+\"", page_html)
+            page_key = str(p_idx) if real_key.group() is None else real_key.group().replace("<div id=\"pf", "").replace("\"", "")
             qmap = pages_map.get(page_key, {})
             questions_list: List[ExamQuestion] = []
             for qid_str, opts in qmap.items():
                 try:
-                    q_index = int(qid_str.split("@_@")[0])
+                    q_index = int(qid_str)
                 except Exception:
                     q_index = 0
                 eq = ExamQuestion(
@@ -360,6 +361,7 @@ async def create_exams(
                 schedule_id=schedule_id,
                 outer_html=outer_html,
                 htmls=exam_htmls,
+                html_height= (1548.95 + 13 * 2) * len(exam_htmls)
             )
         )
         schedules.append(
@@ -476,12 +478,14 @@ async def update_exams(
             # Extract page divs
             page_divs: List[str] = []
             import re as _re
-            for m in _re.finditer(r"<div[^>]*id=\"pf[0-9]+\"[^>]*>.*?</div>[\n ]*?(?=<div id=\"pf)|<div[^>]*id=\"pf[0-9]+\"[^>]*>.*?</div>[\n ]*?</div>[\n ]*?(?=<div class=\"loading-indicator\">)", html_str, flags=_re.DOTALL | _re.IGNORECASE):
+            for m in _re.finditer(r"<div[^>]*id=\"pf[0-9a-zA-Z]+\"[^>]*>.*?</div>[\n ]*?(?=<div id=\"pf)|<div[^>]*id=\"pf[0-9a-zA-Z]+\"[^>]*>.*?</div>[\n ]*?</div>[\n ]*?(?=<div class=\"loading-indicator\">)", html_str, flags=_re.DOTALL | _re.IGNORECASE):
                 page_divs.append(m.group())
 
             exam_htmls: List[ExamHTML] = []
             for p_idx, page_html in enumerate(page_divs, start=1):
-                page_key = str(p_idx)
+                real_key = _re.match(r"<div id=\"pf[0-9a-zA-Z]+\"", page_html)
+                page_key = str(p_idx) if real_key.group() is None else real_key.group().replace("<div id=\"pf",
+                                                                                                "").replace("\"", "")
                 qmap = pages_map.get(page_key, {})
                 questions_list: List[ExamQuestion] = []
                 for qid_str, opts in qmap.items():
@@ -560,6 +564,7 @@ async def update_exams(
                     schedule_id=schedule_id,
                     outer_html=outer_html, # TODO: 원래 html 을 그대로 사용하고 있습니다. 변경 필요
                     htmls=exam_htmls,
+                    html_height = 1548.95 * len(exam_htmls)
                 )
             )
             schedules_acc.append(

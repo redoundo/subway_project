@@ -59,7 +59,8 @@ def extract_questions_options_positions_by_page(pdf_path: str) -> Dict[str, Dict
     doc = fitz.open(pdf_path)
 
     # Patterns
-    question_pattern = re.compile(r"^(\d+)\.\s")
+    # question_pattern = re.compile(r"^(\d+)\.\s")
+    question_pattern = re.compile(r"^(\d+)\.", re.MULTILINE)
 
     pages: Dict[str, Dict[str, Dict[str, Dict[str, float]]]] = {}
 

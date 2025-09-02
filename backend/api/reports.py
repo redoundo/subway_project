@@ -1,6 +1,13 @@
 from backend.core import ExamSessionAuthenticationChecker
 from fastapi import APIRouter, Depends
-from backend.db import User, ExamSession, event_log_crud, EventLog, examinee_crud, Examinee
+from backend.db import (
+    User,
+    ExamSession,
+    event_log_crud,
+    EventLog,
+    examinee_crud,
+    Examinee,
+)
 
 reports_router = APIRouter()
 

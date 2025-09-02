@@ -121,7 +121,29 @@ class EventLog(Document):
         name = "event_logs"
         validate_on_save = True
         indexes : list = [
-            "severity", "event_type", "is_dismissed"
+            "severity", "event_type", "is_dismissed", "exam_id"
+        ]
+
+
+class ChosenAnswer(BaseModel):
+    question_id: str = Field(description="문항의 아이디", min_length=3)
+    chosen_selection: int = Field(description="응시자가 현재 문항에서 선택한 답안의 번호 1~5 사이의 값", ge=1, le=5)
+
+class ExamAnswers(BaseModel):
+    schedule_id: str = Field(description="현재 시험 스케줄의 id", min_length=3)
+    exam_content_id: str = Field(description="시험의 정확한 id 값. 스케줄 id 까지 포함하기에 exam_id 와는 다르다. 물론 스케줄이 하나만 있을 경우는 제외", min_length=3)
+    answers: list[ChosenAnswer] = Field(description="현재 시험에서 응시자가 제출한 답안들의 모음.", min_length=1)
+
+class AllExamAnswers(Document):
+    exam_id: str = Field(description="답안을 제출한 시험의 id", min_length=3)
+    user_id: str = Field(description="답안을 제출한 응시자의 id", min_length=3)
+    all_answers: list[ExamAnswers] = Field(description="시험을 한 번에 여러 번 칠 경우, 스케줄이 여러 개가 생기는데, 이런 경우를 감안해 list 로 만듦.", min_length=1)
+
+    class Settings:
+        name = "exam_answers"
+        validate_on_save = True
+        indexes : list = [
+            "exam_id", "user_id"
         ]
 
 class ExamQuestionSelectionLocation(BaseModel):
@@ -153,6 +175,8 @@ class ExamContent(BaseModel):
     schedule_id: str
     outer_html: str = Field(description="id='page-container' 를 가진 div 태그 그 자체와 id='page-container' 바깥에 있는 모든 html 태그를 의미 합니다.")
     htmls: list[ExamHTML] = Field(description="id='pf[0-9]+' 를 가진 모든 div 태그를 의미 합니다.")
+    html_width: float = Field(description="기본 가로 길이인 1095.25", default=1095.25)
+    html_height: float = Field(description="기본 세로 높이인 1548.95 * 시험 페이지 수")
 
 class Schedule(BaseModel):
     """
