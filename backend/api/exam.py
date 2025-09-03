@@ -15,7 +15,7 @@ from backend.core import AuthenticationChecker, create_examinees_from_csv, build
 from typing import List, Optional, Literal
 from uuid import uuid4
 from secrets import token_urlsafe
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import tempfile

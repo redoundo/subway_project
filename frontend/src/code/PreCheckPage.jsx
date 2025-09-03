@@ -158,7 +158,7 @@ const PreCheckPage = () => {
     };
 
     const handleReturnToDashboard = () => {
-        navigate('/dashboard/examinee');
+        navigate('/examinee/dashboard');
     };
 
     return (

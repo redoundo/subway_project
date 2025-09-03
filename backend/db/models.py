@@ -174,7 +174,7 @@ class ExamContent(BaseModel):
     exam_content_id: str
     schedule_id: str
     outer_html: str = Field(description="id='page-container' 를 가진 div 태그 그 자체와 id='page-container' 바깥에 있는 모든 html 태그를 의미 합니다.")
-    htmls: list[ExamHTML] = Field(description="id='pf[0-9]+' 를 가진 모든 div 태그를 의미 합니다.")
+    htmls: list[ExamHTML] = Field(description="id='pf[0-9a-zA-Z]+' 를 가진 모든 div 태그를 의미 합니다.")
     html_width: float = Field(description="기본 가로 길이인 1095.25", default=1095.25)
     html_height: float = Field(description="기본 세로 높이인 1548.95 * 시험 페이지 수")
 

@@ -39,7 +39,7 @@ app.include_router(on_exam_router, prefix="/api/on-exams", tags=["On-Exams"])
 socket_app = socketio.ASGIApp(sio)
 
 # Mount the Socket.IO app on the main FastAPI app
-app.mount("/ws", socket_app)
+app.mount("/", socket_app)
 
 @app.get("/")
 async def root():

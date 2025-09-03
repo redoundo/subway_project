@@ -1,97 +1,44 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import useExamStore from './store/examStore.js';
+import useExamStore, {useExamAnswerStore} from './store/examStore.js';
 import '../css/ExamPage.css';
 import websocketManager, { SERVER_URLS } from './WebsocketUtils';
 
-/*
-# 요청 :
-## frontend/src/code/ExamPageTestDrive.jsx 파일을 참고하여 응시자가 시험을 보는 화면을 구현해주세요.
-
-frontend/src/code/ExamPageTestDrive.jsx 는 정중앙에 렌더링 되는 시험 문제를 구현하는 코드입니다.
-frontend/src/code/ExamPageTestDrive.jsx 파일에 있는 코드를 이 파일로 옮겨 화면 정중앙에 위치하게 만들어주세요.
-
-그리고 추가적으로 다음과 같은 컴포넌트가 필요합니다 :
-1. ToolBar :
-    - 시험 제목, 현재 몇 교시인지, 시험 종료시간까지 얼마나 남았는지 보여줍니다.
-    - 화면의 맨 위에 붙어 있으며 스크롤을 하더라도 따라다닙니다.
-2. AnswerSpace :
-    - 응시자가 선택한 답을 표시하는 길쭉한 직사각형 컴포넌트입니다. 화면의 맨 오른쪽에 있습니다.
-    - 스크롤 하더라도 동일한 위치에 있습니다. 문항, 선택지 버튼들이 가로로 나열 되어 있습니다.
-    - 응시자가 특정 문항의 답안을 해당 문항으로 직접 이동하지 않아도 답안을 바꿀 수 있는 편의성을 제공합니다.
-        - 하지만 이 말은 AnswerSpace 를 통해 응시자가 고른 선택지가 실제 문항에서도 선택된 상태여야 한다는 걸 의미합니다. 그렇지 않으면 응시자는 혼란에 빠질테니까요.
-        - 즉, 변경 사항이 동기화 되어야 한다는 거죠.
-        - 이 부분은 frontend/src/code/store/examStore.js 을 참고하시면서 구현하시면 됩니다.
-    - frontend/src/code/ExamPageTestDrive.jsx 파일의 42 ~ 46 번째 줄과  224 ~ 238 번째 줄들에 있는 코드가 동기화 기능 없이 아주 간단하게 구현된 AnswerSpace 입니다.
-3. SubmitButton:
-    - 답안을 제출하는 버튼입니다. AnswerSpace 의 하단에 위치하며 AnswerSpace 와 똑같이 스크롤을 해도 움직이지 않습니다.
-    - 답안을 제출하는 ENDPOINT : `POST /api/sessions/submit/{exam_id}`
-    - 답안 제출을 정상적으로 하려면 다음의 값들이 필요합니다.
-        - session_id, jwt_token 는 post 요청의 헤더에 반드시 추가되어야 합니다.
-        - 각 문항의 답안은 {"question_id": 문항_id, "answer_index" : 선택한 선택지의 인덱스 값} 으로 구성되어야 합니다.
-        - schedule_id, exam_content_id 도 같이 data 에 넣어 보내야 합니다.
-        - backend/db/models.py 의 128~147 번째 줄을 확인해주세요. 해당 코드들이 db 모델이 벡엔드 서버가 최종적으로 예상하는 형태입니다.
-    - 시험 종료 전에 응시자가 이 버튼을 누르면 정말로 제출하시겠습니까? 라는 alert 를 발생시킵니다.
-        - 이 alert 의 응답이 '예' 라면, 응시자가 고른 답변들을 `POST /api/sessions/submit/{exam_id}` 로 보냅니다.
-        - 응답이 "아니오" 라면, 아무것도 하지 않습니다.
-    - 이 버튼은 시험 종료 시간이 되자 마자 비활성화 되며 응시자가 선택한 답변들을 `POST /api/sessions/submit/{exam_id}` 로 보낸 뒤 응시자를 바로 /examinee/dashboard 로 이동시키거나 examState 로 화면을 조절합니다.
-        - 추가 스케줄이 있는 경우, examState 를 `waiting` 으로 바꿉니다. examState 값이 waiting 으로 바뀌면 시험 화면이 시험 대기 화면으로 바뀌어야 합니다.
-        - 없는 경우 바로 /examinee/dashboard 로 이동합니다.
- */
-
-// Mock API data for testing
-const MOCK_EXAM_DATA = {
-    title: "Sample Online Exam",
-    period: "1교시",
-    startTime: new Date(Date.now() + 5000).toISOString(), // Starts in 5 seconds for testing
-    endTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
-    questions: [
-        {
-            id: 'q1',
-            title: 'Question 1',
-            image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', // 1x1 black pixel
-            options: ['A', 'B', 'C', 'D'],
-            multiSelect: false,
-        },
-        {
-            id: 'q2',
-            title: 'Question 2',
-            image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
-            options: ['Option 1', 'Option 2', 'Option 3'],
-            multiSelect: true,
-        }
-    ]
-};
 
 
 // --- Sub-components ---
 
 const Toolbar = () => {
-    const { title, period, startTime, endTime } = useExamStore(state => state.examDetails);
+    const exam_meta = useExamStore(state => state.exam_meta);
+    const getCurrentSchedule = useExamStore(state => state.getCurrentSchedule);
+    const legacy = useExamStore(state => state.examDetails);
     const [timeLeft, setTimeLeft] = useState('');
+
+    const currentSchedule = useMemo(() => {
+        try { return getCurrentSchedule ? getCurrentSchedule(new Date()) : null; } catch (_) { return null; }
+    }, [getCurrentSchedule]);
+
+    const title = exam_meta?.exam_title || legacy?.title || 'Exam';
+    const period = currentSchedule ? `${currentSchedule.schedule_index}교시` : (legacy?.period || '');
+    const endTime = currentSchedule?.end_datetime || legacy?.endTime || null;
 
     useEffect(() => {
         if (!endTime) return;
-
         const interval = setInterval(() => {
             const now = new Date();
             const end = new Date(endTime);
             const diff = end - now;
-
             if (diff <= 0) {
                 setTimeLeft('00:00:00');
-                // Add logic to auto-submit exam
                 clearInterval(interval);
                 return;
             }
-
             const hours = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
             const minutes = Math.floor((diff / (1000 * 60)) % 60).toString().padStart(2, '0');
             const seconds = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
             setTimeLeft(`${hours}:${minutes}:${seconds}`);
         }, 1000);
-
         return () => clearInterval(interval);
     }, [endTime]);
 
@@ -167,35 +114,163 @@ const AnswerIndexSpace = () => {
     );
 };
 
+// Render real exam paper using Shadow DOM and clickable overlays
+const ExamPaper = () => {
+    const getExamContentForCurrent = useExamStore(state => state.getExamContentForCurrent);
+    const exam_meta = useExamStore(state => state.exam_meta);
+    const answerStore = useExamAnswerStore();
+
+    const wrapperRef = useRef(null);
+    const hostRef = useRef(null);
+    const shadowRef = useRef(null);
+    const [content, setContent] = useState(null);
+    const [overlays, setOverlays] = useState([]);
+
+    // Resolve content for current schedule
+    useEffect(() => {
+        try {
+            const { content: c } = getExamContentForCurrent({ now: new Date() });
+            setContent(c || null);
+        } catch (e) {
+            console.error('Failed to resolve current exam content:', e);
+            setContent(null);
+        }
+    }, [getExamContentForCurrent, exam_meta]);
+
+    // Inject outer_html and pages into Shadow DOM
+    useEffect(() => {
+        if (!content || !hostRef.current) return;
+        if (!shadowRef.current) {
+            shadowRef.current = hostRef.current.attachShadow({ mode: 'open' });
+        }
+        const shadow = shadowRef.current;
+        shadow.innerHTML = content.outer_html || '';
+        const pageContainer = shadow.getElementById('page-container');
+        if (pageContainer) {
+            pageContainer.style.overflow = 'visible';
+            const totalPages = (content.htmls || []).length || 1;
+            pageContainer.style.height = `${Math.ceil(1548.3 * totalPages)}px`;
+            pageContainer.innerHTML = (content.htmls || []).map(h => h.html).join('');
+        }
+    }, [content]);
+
+    const recomputeOverlays = useCallback(() => {
+        if (!content || !shadowRef.current || !wrapperRef.current) return;
+        const shadow = shadowRef.current;
+        const wrapper = wrapperRef.current;
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const scrollX = wrapper.scrollLeft;
+        const scrollY = wrapper.scrollTop;
+        const items = [];
+        const diff = 1.333321996963399; // Scale factor used in test drive
+        for (const page of content.htmls || []) {
+            const pageId = `pf${page.page_index}`;
+            const pageEl = shadow.getElementById(pageId);
+            if (!pageEl) continue;
+            const pageRect = pageEl.getBoundingClientRect();
+            const baseLeft = pageRect.left - wrapperRect.left + scrollX;
+            const baseTop = pageRect.top - wrapperRect.top + scrollY;
+            for (const q of page.questions || []) {
+                for (const sel of q.selection || []) {
+                    const { x0, y0 } = sel.location || {};
+                    if (typeof x0 !== 'number' || typeof y0 !== 'number') continue;
+                    const left = Math.floor(baseLeft + x0 / diff);
+                    const top = Math.floor(baseTop + y0 / diff);
+                    const width = 8;
+                    const height = 8;
+                    items.push({
+                        id: `${q.question_id}-${sel.selection_index}-${page.page_index}`,
+                        question_id: q.question_id,
+                        selection_index: sel.selection_index,
+                        page_index: page.page_index,
+                        left, top, width, height,
+                    });
+                }
+            }
+        }
+        setOverlays(items);
+    }, [content]);
+
+    useEffect(() => { recomputeOverlays(); }, [recomputeOverlays]);
+    useEffect(() => {
+        const onResize = () => recomputeOverlays();
+        const onScroll = () => recomputeOverlays();
+        window.addEventListener('resize', onResize);
+        window.addEventListener('scroll', onScroll);
+        const wrapper = wrapperRef.current;
+        if (wrapper) wrapper.addEventListener('scroll', onScroll);
+        return () => {
+            window.removeEventListener('resize', onResize);
+            window.removeEventListener('scroll', onScroll);
+            if (wrapper) wrapper.removeEventListener('scroll', onScroll);
+        };
+    }, [recomputeOverlays]);
+
+    return (
+        <div ref={wrapperRef} style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'auto' }}>
+            <div ref={hostRef} style={{
+                position: 'relative', zIndex: 1, display: 'block', margin: '0 auto', width: '100vw',
+                height: (content ?? null) === null ? 'fit-content' : content.html_height,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+            }} />
+            <div style={{
+                position: 'absolute', left: 0, top: 0,
+                width: (content ?? null) === null ? '100%' : content.html_width,
+                height: (content ?? null) === null ? '100%' : content.html_height,
+                zIndex: 2, pointerEvents: 'none'
+            }}>
+                {overlays.map(item => {
+                    const isSelected = answerStore.answers[item.question_id] === item.selection_index;
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={(e) => { e.stopPropagation(); answerStore.selectAnswer(item.question_id, item.selection_index); }}
+                            title={`Q:${item.question_id} - ${item.selection_index}`}
+                            style={{
+                                position: 'absolute', left: item.left, top: item.top,
+                                width: item.width, height: item.height, borderRadius: 10,
+                                border: isSelected ? '2px solid #2563eb' : '2px solid rgba(0,0,0,0.25)',
+                                background: isSelected ? 'rgba(37, 99, 235, 0.15)' : 'rgba(255,255,255,0.4)',
+                                color: '#111', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                                pointerEvents: 'auto', display: 'flex', alignItems: 'center',
+                                justifyContent: 'center', userSelect: 'none',
+                                padding: '7px'
+                            }}
+                        >
+                            {item.selection_index}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 const SubmitButton = () => {
     const { examId } = useParams();
-    const { answers, isSubmitted, submitExam } = useExamStore();
     const navigate = useNavigate();
+
+    const isSubmitted = useExamStore(state => state.isSubmitted);
+    const recordSubmission = useExamStore(state => state.recordSubmission);
+    const answerStore = useExamAnswerStore();
 
     const handleSubmit = async () => {
         if (isSubmitted) return;
-
-        const formattedAnswers = {
-            // This structure might need adjustment based on the exact backend requirement
-            // e.g., exam_content_id might be a single ID for the whole test
-            answer: Object.entries(answers).reduce((acc, [questionId, answerIndices]) => {
-                // Assuming question IDs are like "q1", "q2" and we need to send "1", "2"
-                const questionNum = questionId.replace('q', '');
-                acc[questionNum] = answerIndices;
-                return acc;
-            }, {})
-        };
-
         try {
-            // await axios.post(`/api/session/${examId}/submit`, formattedAnswers);
-            console.log("Submitting:", formattedAnswers);
-            submitExam();
-            alert("Exam submitted successfully!");
+            const payload = answerStore.buildPayload();
+            const jwtToken = localStorage.getItem('jwt_token');
+            await axios.post(`/sessions/submit/${examId}`, payload, {
+                headers: { 'Content-Type': 'application/json', jwt_token: jwtToken },
+                withCredentials: true,
+            });
+            // Record and reset
+            answerStore.afterSubmitAndReset();
+            alert('Exam submitted successfully!');
             websocketManager.disconnect();
             navigate('/dashboard/examinee');
         } catch (error) {
-            console.error("Failed to submit exam:", error);
-            alert("There was an error submitting your exam.");
+            console.error('Failed to submit exam:', error);
+            alert('There was an error submitting your exam.');
         }
     };
 
@@ -213,47 +288,82 @@ const SubmitButton = () => {
 
 const ExamPage = () => {
     const { examId } = useParams();
-    const [examState, setExamState] = useState('waiting'); // waiting, started, finished
+    const [examState, setExamState] = useState('waiting'); // 'waiting' | 'start'
     const [isExamReady, setIsExamReady] = useState(false);
+    const [waitingCountdown, setWaitingCountdown] = useState('');
+    const [joinInfo, setJoinInfo] = useState(null); // { session_id, user_id, user_name, exam_title, exam_start_datetime }
+
     const setExamData = useExamStore(state => state.setExamData);
+    const getNextSchedule = useExamStore(state => state.getNextSchedule);
+    const getCurrentSchedule = useExamStore(state => state.getCurrentSchedule);
+    const getExamContentForCurrent = useExamStore(state => state.getExamContentForCurrent);
+    const hasNextSchedule = useExamStore(state => state.hasNextSchedule);
+    const exam_meta = useExamStore(state => state.exam_meta);
     const videoRef = useRef(null);
+
+    // Pick the target start time for waiting screen
+    const targetSchedule = useMemo(() => {
+        // If we already have schedules and a next schedule exists, use it
+        try {
+            const next = getNextSchedule ? getNextSchedule(new Date()) : null;
+            if (next) return next;
+        } catch (_) {}
+        return null;
+    }, [getNextSchedule, exam_meta?.exam_start_datetime, hasNextSchedule]);
+
+    const targetStartTime = useMemo(() => {
+        if (targetSchedule && targetSchedule.start_datetime) return targetSchedule.start_datetime;
+        if (joinInfo?.exam_start_datetime) return new Date(joinInfo.exam_start_datetime);
+        if (exam_meta?.exam_start_datetime) return exam_meta.exam_start_datetime;
+        return null;
+    }, [targetSchedule, joinInfo, exam_meta]);
 
     // 1. Join session and set up media on initial load
     useEffect(() => {
         const setupConnections = async () => {
             try {
+                const existingSessionId = localStorage.getItem('session_id');
+                const hasLocalVideo = !!(videoRef.current && videoRef.current.srcObject);
+                if (existingSessionId && hasLocalVideo) {
+                    console.log('Skipping setupConnections; session/video already present.');
+                    return;
+                }
 
                 // Step 1: Join the exam session via HTTP
                 const jwtToken = localStorage.getItem('jwt_token');
-                await axios.get(`/session/join_session/${examId}`, {
+                const joinRes = await axios.get(`/sessions/join_session/${examId}`, {
                     headers: { jwt_token : jwtToken }, withCredentials: true
                 });
-                console.log("Successfully joined exam session.");
+                const joinData = joinRes?.data || {};
+                console.log('Joined exam session:', joinData);
+                if (joinData?.session_id) localStorage.setItem('session_id', joinData.session_id);
+                setJoinInfo(joinData);
 
                 // Step 3: Connect to media server and publish stream
-                await websocketManager.connect(SERVER_URLS.MEDIA_SERVER_URL);
-                console.log("Media server WebSocket connected.");
+                await websocketManager.connect(SERVER_URLS.MEDIA_SERVER_URL, "");
+                console.log('Media server WebSocket connected.');
 
                 const stream = await websocketManager.startWebcam();
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream; // Display local video
                 }
                 const { audioProducerId, videoProducerId } = await websocketManager.publish(stream);
-                console.log("Media stream published successfully.", { audioProducerId, videoProducerId });
+                console.log('Media stream published successfully.', { audioProducerId, videoProducerId });
 
                 // Step 2: Connect to backend WebSocket
-                await websocketManager.connect(SERVER_URLS.BACKEND_SERVER_URL);
-                console.log("Backend WebSocket connected.");
+                await websocketManager.connect(SERVER_URLS.BACKEND_SERVER_URL, examId);
+                console.log('Backend WebSocket connected.');
 
                 // Setup message listener
-                websocketManager.backendSocket.on('message', (data) => {
-                    console.log('Received message from backend:', data);
-                    alert(`감독관 메시지: ${data.message || JSON.stringify(data)}`);
-                });
-
+                if (websocketManager.backendSocket) {
+                    websocketManager.backendSocket.on('message', (data) => {
+                        console.log('Received message from backend:', data);
+                        alert(`감독관 메시지: ${data.message || JSON.stringify(data)}`);
+                    });
+                }
 
             } catch (error) {
-                console.error("Failed to setup connections:", error);
+                console.error('Failed to setup connections:', error);
                 // Handle error, maybe redirect to an error page
             }
         };
@@ -269,42 +379,83 @@ const ExamPage = () => {
     // 2. Fetch exam questions when started
     const startExam = useCallback(async () => {
         try {
-            // const token = localStorage.getItem('token');
-            // const response = await axios.get(`/session/examinee/get_exam_questions/${examId}`, {
-            //     headers: { Authorization: `Bearer ${token}` }
-            // });
-            // setExamData(response.data);
-            setExamData(MOCK_EXAM_DATA); // Using mock data for now
-            setExamState('started');
+            // 1) Determine if we need to fetch exam content
+            let needFetch = false;
+            try {
+                // Throws if content for current schedule is not found
+                if (getExamContentForCurrent) getExamContentForCurrent({ now: new Date() });
+                else needFetch = true;
+            } catch (_) {
+                needFetch = true;
+            }
+
+            if (needFetch) {
+                const jwtToken = localStorage.getItem('jwt_token');
+                const res = await axios.get(`/sessions/get_exam_content/${examId}`, {
+                    headers: { jwt_token: jwtToken }, withCredentials: true
+                });
+                setExamData(res.data);
+            }
+
+            // 2) Resolve current schedule and its content
+            const { schedule, content } = getExamContentForCurrent({ now: new Date() });
+            const question_ids = [];
+            for (const h of content.htmls || []) {
+                for (const q of (h.questions || [])) {
+                    if (q?.question_id) question_ids.push(q.question_id);
+                }
+            }
+            const user_id = (joinInfo && joinInfo.user_id) ? joinInfo.user_id : (exam_meta?.user_id || '');
+            useExamAnswerStore.getState().initExam({
+                user_id,
+                schedule_id: schedule.schedule_id,
+                exam_content_id: content.exam_content_id,
+                question_ids,
+            });
+
+            // 3) Switch to exam
+            setExamState('start');
         } catch (error) {
-            console.error("Failed to fetch exam questions:", error);
-            // Handle error
+            console.error('Failed to fetch exam content or initialize:', error);
         }
-    }, [examId, setExamData]);
+    }, [examId, setExamData, getExamContentForCurrent, joinInfo, exam_meta]);
 
 
     // 3. Check if it's time to start the exam
     useEffect(() => {
-        if (examState === 'waiting') {
-            const interval = setInterval(() => {
-                // This logic should be driven by server time, but using client time for mock
-                const now = new Date();
-                const startTime = new Date(MOCK_EXAM_DATA.startTime);
-                if (now >= startTime) {
-                    setIsExamReady(true);
-                    clearInterval(interval);
-                }
-            }, 1000);
-            return () => clearInterval(interval);
-        }
-    }, [examState]);
+        if (examState !== 'waiting') return;
+        const interval = setInterval(() => {
+            if (!targetStartTime) return;
+            const now = new Date();
+            const diff = targetStartTime - now;
+            if (diff <= 0) {
+                setIsExamReady(true);
+                setWaitingCountdown('00:00:00');
+                clearInterval(interval);
+                return;
+            }
+            const hours = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+            const minutes = Math.floor((diff / (1000 * 60)) % 60).toString().padStart(2, '0');
+            const seconds = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
+            setWaitingCountdown(`${hours}:${minutes}:${seconds}`);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [examState, targetStartTime]);
 
 
     if (examState === 'waiting') {
+        const title = joinInfo?.exam_title || exam_meta?.exam_title || 'Exam';
+        const userName = joinInfo?.user_name || exam_meta?.user_name || '';
+        const scheduleIndex = targetSchedule?.schedule_index || 1;
         return (
             <div className="waiting-room">
                 <h1>Exam Waiting Room</h1>
-                <p>The exam will be available to start at the designated time.</p>
+                <div style={{ marginBottom: '12px' }}>
+                    <div><strong>Title:</strong> {title}</div>
+                    <div><strong>Examinee:</strong> {userName}</div>
+                    <div><strong>교시:</strong> {scheduleIndex}교시</div>
+                </div>
+                <p>Starts in: <span className="countdown">{waitingCountdown || '...'}</span></p>
                 <video ref={videoRef} autoPlay muted playsInline style={{ width: '320px', height: '240px', border: '1px solid black' }} />
                 <button onClick={startExam} disabled={!isExamReady}>
                     {isExamReady ? 'Start Exam' : 'Waiting for exam to start...'}
@@ -317,10 +468,14 @@ const ExamPage = () => {
         <div className="exam-container">
             <Toolbar />
             <div className="main-content">
-                <ExamQuestionSpace />
+                {/* Real exam paper rendered via Shadow DOM with overlay selections */}
+                <div style={{ flex: 1, minHeight: 0 }}>
+                    <ExamPaper />
+                </div>
                 <div className="sidebar">
                     {/* A small video feed for the user to see themselves */}
                     <video ref={videoRef} autoPlay muted playsInline style={{ width: '100%', border: '1px solid #ccc', marginBottom: '10px' }} />
+                    {/* Keep legacy answer index space for now; may be empty if using real content */}
                     <AnswerIndexSpace />
                     <SubmitButton />
                 </div>

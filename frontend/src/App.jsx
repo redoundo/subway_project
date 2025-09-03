@@ -5,7 +5,7 @@ import { AdminDashboard, ExamineeDashboard, ProctorDashboard } from './code/Dash
 import AdminExamForm from "./code/AdminExamForm.jsx";
 import PreCheckPage from "./code/PreCheckPage.jsx";
 import MonitoringDashboard from "./code/MonitoringDashboard.jsx";
-import {CookiesProvider} from "react-cookie";
+import ExamPage from "./code/ExamPage.jsx";
 import ExamPageTestDrive from "./code/ExamPageTestDrive.jsx";
 
 
@@ -15,11 +15,10 @@ axios.defaults.withCredentials = true;
 
 function App() {
   return (
-      <CookiesProvider>
     <Routes>
-      <Route path="/" element={<ExamPageTestDrive/>}/>
+      {/*<Route path="/" element={<ExamPageTestDrive/>}/>*/}
       {/* Redirect root to admin login */}
-      {/*<Route path="/" element={<Navigate to="/admin/login" />} />*/}
+      <Route path="/" element={<Navigate to="/admin/login" />} />
 
       {/* Login Routes */}
       <Route path="/admin/login" element={<AdminLogin />} />
@@ -36,12 +35,11 @@ function App() {
       <Route path="/examinee/pre-check/:examId" element={<PreCheckPage />} />
 
       {/* Other Routes */}
-      {/*
-      <Route path="/examinee/exam-session/:examId" element={<ExamSession />} />
-      */}
+
+      <Route path="/examinee/exam-session/:examId" element={<ExamPage />} />
+
       <Route path="/proctor/monitoring/:examId" element={<MonitoringDashboard />} />
     </Routes>
-        </CookiesProvider>
   );
 }
 

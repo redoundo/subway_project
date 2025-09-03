@@ -4,7 +4,7 @@ import jwt
 from dotenv import load_dotenv
 from typing import Dict, Set, Optional
 from backend.db import Logs, LogContent, User
-from backend.db import logs_crud, user_crud
+from backend.db import logs_crud, user_crud, examinee_crud
 
 load_dotenv()
 
@@ -49,10 +49,10 @@ async def log_event(user_id: str, log_type: str, url_path: str, content: Optiona
 
 
 @sio.on("connect")
-async def connect(sid, environ, auth: Dict):
+async def connect(sid, environ , auth):
     """Handle new client connections with authentication."""
-    token = auth.get("token")
-    exam_id = auth.get("exam_id")
+    token = auth["token"]
+    exam_id = auth["exam_id"]
 
     if not token or not exam_id:
         print(f"Connection rejected for sid {sid}: Missing token or exam_id.")
@@ -108,39 +108,10 @@ async def disconnect(sid):
             for proctor_sid in proctors_in_room:
                 await sio.emit("examinee_disconnected", {"userId": user_id}, to=proctor_sid)
             print(f"Notified {len(proctors_in_room)} proctors about examinee {user_id} disconnection.")
+            await examinee_crud.update(ObjectId(user_id), {"status" : "disconnected"})
 
         await log_event(user_id, "WEBSOCKET_DISCONNECT", f"/ws/signal/{exam_id}")
         print(f"Client disconnected: {sid}, User: {user_id}, Exam: {exam_id}")
-
-# mediasoup 을 미디어 서버로 사용하게 되어 서버의 시그널링 기능이 필요 없어졌습니다.
-# 하지만 만에 하나 필요 할까봐 유지하는 중입니다.
-# @sio.on("webrtc-offer")
-# async def handle_webrtc_offer(sid, data: Dict):
-#     """Handle WebRTC offer and forward to video server."""
-#     session = await sio.get_session(sid)
-#     if not session:
-#         await sio.emit("error", {"message": "Authentication failed."}, to=sid)
-#         return
-#
-#     exam_id = session["exam_id"]
-#     offer_payload = {
-#         "type": "offer",
-#         "payload": data.get("payload"),
-#         "user_id": session["user_id"],
-#         "role": session["role"]
-#     }
-#
-#     async with httpx.AsyncClient() as client:
-#         try:
-#             response = await client.post(VIDEO_SERVER_URL.format(exam_id=exam_id), json=offer_payload, timeout=10.0)
-#             response.raise_for_status()
-#             # Forward the SDP Answer from the video server back to the client
-#             await sio.emit("webrtc-answer", response.json(), to=sid)
-#         except httpx.RequestError as e:
-#             await sio.emit("error", {"message": f"Failed to connect to video server: {e}"}, to=sid)
-#         except httpx.HTTPStatusError as e:
-#             await sio.emit("error", {"message": f"Video server error: {e.response.text}"}, to=sid)
-
 
 @sio.on("message")
 async def handle_message(sid, data: Dict):

@@ -55,15 +55,15 @@ const MonitoringDashboard = () => {
                 });
                 const fetchedExam = examDetailsResponse.data;
                 setExam(fetchedExam);
-
+                console.log(fetchedExam);
                 // Initialize examinees map from the expected list
                 const initialExaminees = new Map();
-                fetchedExam.examinees.forEach(ex => {
-                    initialExaminees.set(ex.id.toString(), { user: ex, stream: null });
+                fetchedExam.expected_examinees.forEach(ex => {
+                    initialExaminees.set(ex._id, { user: ex, stream: null });
                 });
                 
                 // Join session and get session_id cookie
-                const res = await axios.get(`/session/supervisor_join_session/${examId}`, {
+                const res = await axios.get(`/sessions/supervisor_join_session/${examId}`, {
                     headers: { jwt_token: jwtToken }, withCredentials: true
                 });
                 console.log(res);
@@ -71,16 +71,16 @@ const MonitoringDashboard = () => {
                 localStorage.setItem('session_id', res.data.session_id);
 
                 // Connect to media server
-                await websocketManager.connect(SERVER_URLS.MEDIA_SERVER_URL);
+                await websocketManager.connect(SERVER_URLS.MEDIA_SERVER_URL, examId);
                 await websocketManager.loadDevice();
                 // TODO: 불필요한 코드입니다. react-cookie 도입이 시급. axios 요청을 보낼 때 특정 flag 로 사용할 쿠키를 조절하거나 추가 여부를 결정할 수 있는 방법을 모색해야 합니다.
                 const sessionId = localStorage.getItem('session_id');
                 // Get already connected examinees and subscribe to their streams
-                const connectedExamineesResponse = await axios.get(`/session/${examId}/examinees`, {
+                const connectedExamineesResponse = await axios.get(`/sessions/${examId}/examinees`, {
                     headers: { jwt_token: jwtToken, session_id: sessionId }, withCredentials: true
                 });
                 
-                const connectedIds = connectedExamineesResponse.data.map(ex => ex.id.toString());
+                const connectedIds = connectedExamineesResponse.data.map(ex => ex._id);
                 if (connectedIds.length > 0) {
                     const streamsMap = await websocketManager.subscribe(connectedIds);
                     streamsMap.forEach((value, key) => {
@@ -95,10 +95,10 @@ const MonitoringDashboard = () => {
 
 
                 // Connect to backend websocket for real-time updates
-                await websocketManager.connect(SERVER_URLS.BACKEND_SERVER_URL);
+                await websocketManager.connect(SERVER_URLS.BACKEND_SERVER_URL, examId);
                 websocketManager.backendSocket.on('message', async (event) => {
                     if (event.type === 'examinee_connected' && event.userId) {
-                        const newUserId = event.userId.toString();
+                        const newUserId = event.userId;
                         // Check if we don't already have a stream for this user
                         if (examinees.has(newUserId) && !examinees.get(newUserId).stream) {
                             const streamMap = await websocketManager.subscribe([newUserId]);
@@ -134,13 +134,13 @@ const MonitoringDashboard = () => {
     }, [examId]);
 
     const handleAddRecipient = (user) => {
-        if (!recipients.find(r => r.id === user.id)) {
+        if (!recipients.find(r => r._id === user._id)) {
             setRecipients([...recipients, user]);
         }
     };
 
     const handleRemoveRecipient = (userId) => {
-        setRecipients(recipients.filter(r => r.id !== userId));
+        setRecipients(recipients.filter(r => r._id !== userId));
     };
 
     const handleSendMessage = () => {
@@ -149,7 +149,7 @@ const MonitoringDashboard = () => {
         const payload = {
             message,
             // If recipients array is empty, message is broadcast to all
-            target_users: recipients.map(r => r.id) 
+            target_users: recipients.map(r => r._id)
         };
 
         // Assuming the backend socket uses a 'send_message' event
@@ -180,7 +180,7 @@ const MonitoringDashboard = () => {
                 <div className="streams-grid">
                     {Array.from(examinees.values()).map(({ user, stream }) => (
                         <StreamPlayer
-                            key={user.id}
+                            key={user._id}
                             user={user}
                             stream={stream}
                             onSendMessage={handleAddRecipient}
@@ -193,9 +193,9 @@ const MonitoringDashboard = () => {
                     <span className="label">To:</span>
                     {recipients.length > 0 ? (
                         recipients.map(user => (
-                            <span key={user.id} className="recipient-tag">
+                            <span key={user._id} className="recipient-tag">
                                 {user.name}
-                                <button onClick={() => handleRemoveRecipient(user.id)}>x</button>
+                                <button onClick={() => handleRemoveRecipient(user._id)}>x</button>
                             </span>
                         ))
                     ) : (

@@ -1,12 +1,15 @@
 from bson import ObjectId
+from datetime import datetime, UTC
 
 from backend.core import send_email, ExamSessionAuthenticationChecker
-from fastapi import APIRouter, Depends, HTTPException, Response, Cookie
-from backend.db import exam_crud, exam_session_crud, examinee_crud
+from fastapi import APIRouter, Depends, HTTPException, Response, Cookie, Body
+from backend.db import exam_crud, exam_session_crud, examinee_crud, exam_answers_crud
 from uuid import uuid4
 from backend.db import ExamDetectRule, ExamSession, User, Examinee, Exam
 from backend.db import Logs, logs_crud
+from backend.db import AllExamAnswers, ExamAnswers, ChosenAnswer
 from typing import Annotated
+from pydantic import BaseModel, Field
 
 sessions_router = APIRouter()
 
@@ -69,11 +72,21 @@ async def create_session(
     return {"session_id": new_session_id}
 
 
-@sessions_router.get("/join_session/{exam_id}", summary="응시자 시험 세션 참여")
+class JoinedSessionInfo(BaseModel):
+    msg: str | None = None
+    session_id: str
+    user_id: str
+    user_name: str
+    exam_start_datetime: datetime
+    exam_title: str
+
+@sessions_router.get(
+    path = "/join_session/{exam_id}", summary="응시자 시험 세션 참여",
+    response_model=JoinedSessionInfo,
+)
 async def examinee_join_session(
     exam_id: str,
     response: Response,
-    session_id: Annotated[str | None, Cookie()] = None,
     info: tuple[User, ExamSession] = Depends(
         ExamSessionAuthenticationChecker(role=["examinee"], session_id_required=False)
     )
@@ -85,13 +98,19 @@ async def examinee_join_session(
     if session.session_status != 'ready':
         raise HTTPException(status_code=400, detail="Session is not ready to be joined")
 
-    if session_id is not None:
+    session_info : JoinedSessionInfo = JoinedSessionInfo(
+        session_id=session.session_id, user_id=str(current_user.id),
+        user_name=current_user.name, exam_title=session.exam.exam_title,
+        exam_start_datetime=session.exam.exam_start_datetime
+    )
+    if session.session_id is not None:
         # examinee_crud 를 사용하여 이미 해당 세션에 참여한 응시자인지 확인합니다.
         existing_examinee : Examinee | None = await examinee_crud.get_by(
-            {'session_id': session_id, 'examinee._id': current_user.id}
+            {'session_id': session.session_id, 'examinee._id': current_user.id, "exam_id" : exam_id}
         )
         if existing_examinee:
-            return {"message": "User has already joined the session.", "examinee_info": existing_examinee.model_dump_json()}
+            session_info.msg = "User has already joined the session."
+            return session_info.model_dump()
 
     new_examinee = Examinee(
         session_id=session.session_id,
@@ -107,7 +126,8 @@ async def examinee_join_session(
 
     # session_id 를 쿠키에 넣어 보냅니다.
     response.set_cookie(key="session_id", value=session.session_id)
-    return {"message": "Successfully joined the session."}
+    session_info.msg = "Successfully joined the session."
+    return session_info.model_dump()
 
 
 @sessions_router.get("/supervisor_join_session/{exam_id}", summary="감독관 시험 참여 및 세션 준비")
@@ -173,24 +193,133 @@ async def get_exist_examinee_infos(
 
     return examinee_infos
 
+
 @sessions_router.get(
     path = "/get_exam_content/{exam_id}",
     description="응시할 시험 문제들을 제공합니다. 시험 화면에 입장할 때 바로 호출 됩니다."
 )
 async def get_exam_content(
-        exam_id: str,
         info: tuple[User, ExamSession] = Depends(
             ExamSessionAuthenticationChecker(role=["examinee"])
         ),
 ):
-    return
+    user, session = info
+    if session is None:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+
+    exam: Exam = session.exam
+    now = datetime.now(UTC)
+    start_at = exam.exam_start_datetime
+
+    # Validate allowable request window
+    if now >= start_at:
+        elapsed_seconds = (now - start_at).total_seconds()
+        if elapsed_seconds > 59:
+            raise HTTPException(status_code=400, detail="Exam content request window has passed (over 1 minute since start).")
+    else:
+        # Before start time: session must be ready
+        if session.session_status != 'ready':
+            raise HTTPException(status_code=400, detail="Session is not ready to provide exam content.")
+
+    return {
+        "user_name": user.name,
+        "user_id": str(user.id),
+        "exam_start_datetime": exam.exam_start_datetime,
+        "exam_end_datetime": exam.exam_end_datetime,
+        "exam_title": exam.exam_title,
+        "schedules": exam.schedules,
+        "exam_contents": exam.contents,
+        "exam_duration_time": exam.exam_duration_time,
+        "break_time": exam.break_time,
+    }
+
+
+class AnAnswer(BaseModel):
+    question_id: str = Field(min_length=1)
+    chosen_selection: int
+
+
+class ExamineeAnswers(BaseModel):
+    user_id: str = Field(min_length=1)
+    schedule_id: str = Field(min_length=1)
+    exam_content_id: str = Field(min_length=1)
+    answers: list[AnAnswer] = Field(min_length=1)
 
 
 @sessions_router.post("/submit/{exam_id}")
 async def submit_exam_answers(
         exam_id: str,
+        payload: ExamineeAnswers = Body(...),
         info: tuple[User, ExamSession] = Depends(
             ExamSessionAuthenticationChecker(role=["examinee"])
         ),
 ):
-    return
+    user, session = info
+
+    # Validate user id consistency
+    if payload.user_id != str(user.id):
+        raise HTTPException(status_code=401, detail="User ID does not match authenticated user.")
+
+    exam: Exam = session.exam
+
+    # Validate schedule existence within this exam
+    schedule = None
+    for sch in exam.schedules:
+        if sch.schedule_id == payload.schedule_id:
+            schedule = sch
+            break
+    if schedule is None:
+        raise HTTPException(status_code=400, detail="Invalid schedule_id for this exam.")
+
+    # Validate schedule -> content mapping
+    if schedule.content_id != payload.exam_content_id:
+        raise HTTPException(status_code=400, detail="Provided exam_content_id does not match the schedule's content.")
+
+    # Find the corresponding ExamContent
+    exam_content = None
+    for c in exam.contents:
+        if c.exam_content_id == payload.exam_content_id:
+            exam_content = c
+            break
+    if exam_content is None:
+        raise HTTPException(status_code=400, detail="Invalid exam_content_id for this exam.")
+
+    # Validate number of answers equals total questions
+    total_questions = sum(len(h.questions) for h in exam_content.htmls)
+    if total_questions != len(payload.answers):
+        raise HTTPException(status_code=400, detail="The number of answers does not match the number of questions.")
+
+    # Build ExamAnswers document
+    exam_answers = ExamAnswers(
+        schedule_id=payload.schedule_id,
+        exam_content_id=payload.exam_content_id,
+        answers=[ChosenAnswer(question_id=a.question_id, chosen_selection=a.chosen_selection) for a in payload.answers]
+    )
+
+    # Ensure single submission per (schedule_id, exam_content_id)
+    existing: AllExamAnswers | None = await exam_answers_crud.get_by({
+        "exam_id": exam_id,
+        "user_id": payload.user_id
+    })
+
+    if existing:
+        # Check for duplicate submission
+        for ans in existing.all_answers:
+            if ans.schedule_id == payload.schedule_id and ans.exam_content_id == payload.exam_content_id:
+                raise HTTPException(status_code=400, detail="Answers for this schedule/content already submitted.")
+
+        # Append and update
+        existing.all_answers.append(exam_answers)
+        await exam_answers_crud.update(existing.id, existing)
+    else:
+        new_doc = AllExamAnswers(
+            exam_id=exam_id,
+            user_id=payload.user_id,
+            all_answers=[exam_answers]
+        )
+        await exam_answers_crud.create(new_doc)
+
+    # Optionally record a log
+    log = Logs(user=user, url_path=f"/session/submit/{exam_id}", log_type="EXAM_SUBMIT")
+    await logs_crud.create(log)
+    return Response(status_code=204)

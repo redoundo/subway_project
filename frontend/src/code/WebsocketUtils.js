@@ -35,14 +35,29 @@ class WebsocketManager {
   /**
    * Establishes a connection to the WebSocket server.
    * @param {string} url
+   * @param {string} examId
    * @returns {Promise<void>}
    */
-  async connect(url) {
+  async connect(url, examId) {
     return new Promise((resolve, reject) => {
-      let socket = io(url, {transports: ['websocket']});
-
-      if (url === SERVER_URLS.BACKEND_SERVER_URL) this.backendSocket = socket;
-      else this.mediaSocket = socket;
+      let socket;
+      if (url === SERVER_URLS.BACKEND_SERVER_URL) {
+        const jwtTok = localStorage.getItem("jwt_token");
+        this.backendSocket = io(url, {
+          transports: ["websocket"],
+          auth: {
+            exam_id: examId,
+            token: jwtTok,
+          }
+        });
+        socket = this.backendSocket;
+      }
+      else {
+        this.mediaSocket = io(url, {
+          transports: ["websocket"],
+        });
+        socket = this.mediaSocket;
+      }
 
       socket.on('connect', () => {
         console.log('Socket connected successfully.');
@@ -247,7 +262,7 @@ class WebsocketManager {
       }
       return returnMap;
     } catch (err) {
-      console.error(`Error subscribing to producer ${producerId}:`, err);
+      console.error(`Error subscribing to producer  :`, err);
       throw err;
     }
   }

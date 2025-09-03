@@ -92,18 +92,12 @@ const AdminExamItem = ({ item }) => {
     );
 };
 
-/*
-# 요청:
-## ExamCard 에 있는 Pre-Check 과정을 ExamCard 가 아닌 다른 컴포넌트에서 처리할 수 있게 만들어주세요.
-
-ExamCard 에 있는 handlePreCheck 와 <button className="btn btn-secondary" onClick={() => handlePreCheck(exam.exam._id)}>Pre-Check</button> 를
-<div className="dashboard-header"> 내부로 옮겨주시면 됩니다.
- */
-
 // Helper component for displaying a single exam
 const ExamCard = ({ exam, userType }) => {
+    console.log(exam);
     const navigate = useNavigate();
-    const { preCheckCompleted } = useStatusStore();
+    const {  preCheckComplete } = useStatusStore();
+    console.log(preCheckComplete);
     const handlePreCheck = (examId) => {
         navigate(`/examinee/pre-check/${examId}`);
     };
@@ -132,7 +126,7 @@ const ExamCard = ({ exam, userType }) => {
                     <>
                         <button className="btn btn-secondary" onClick={() => handlePreCheck(exam.exam._id)}>Pre-Check</button>
                         {
-                            preCheckCompleted ? // TODO : exam.session_status 를 어떻게 업데이트하지?
+                            preCheckComplete ?
                                 <button className="btn btn-primary" disabled={exam.session_status !== "ready"} onClick={() => handleEnterExam(exam.exam._id)}>
                                     Enter
                                 </button>
@@ -208,9 +202,10 @@ export const ExamineeDashboard = () => {
         const fetchExams = async () => {
             try {
                 const jwtToken = localStorage.getItem('jwt_token');
+                const sessionId = localStorage.getItem('session_id');
                 // 응시 가능한 시험 정보들을 가져옵니다.
                 const response = await axios.get('/exams/examinee', {
-                    headers: { "jwt_token" : jwtToken}, withCredentials: true
+                    headers: { "jwt_token" : jwtToken, session_id: sessionId}, withCredentials: true
                 });
                 // Check local storage for pre-check status
                 const examSessionsWithStatus = response.data.map(examSession => ({
@@ -254,9 +249,10 @@ export const ProctorDashboard = () => {
         const fetchExams = async () => {
             try {
                 const jwtToken = localStorage.getItem('jwt_token');
+                const sessionId = localStorage.getItem('session_id');
                 // This API endpoint is an assumption based on the documentation.
                 const response = await axios.get('/exams/supervisor', {
-                    headers: { "jwt_token" : jwtToken}, withCredentials: true
+                    headers: { "jwt_token" : jwtToken, session_id: sessionId}, withCredentials: true
                 });
                 setSessions(response.data);
             } catch (err) {

@@ -18,7 +18,8 @@ mat = fitz.Matrix(zoom, zoom)
 # 1pt = 1/72 inch, CSS px 는 1in = 96px 이므로 1pt ~= 96/72 px
 CSS_PX_PER_PT = 96 / 72
 HTML_ZOOM = 1.3
-html_mat = fitz.Matrix(HTML_ZOOM * CSS_PX_PER_PT, HTML_ZOOM * CSS_PX_PER_PT)
+# html_mat = fitz.Matrix(HTML_ZOOM * CSS_PX_PER_PT, HTML_ZOOM * CSS_PX_PER_PT)
+html_mat = fitz.Matrix(HTML_ZOOM, HTML_ZOOM )
 
 
 def _symbol_to_index(symbol: str) -> Optional[int]:
