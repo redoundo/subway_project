@@ -7,3 +7,4 @@
 backend/front_example
 */node_modules
 *.html
+*.vscode
